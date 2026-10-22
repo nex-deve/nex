@@ -1,0 +1,8 @@
+public key: d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+signature: 256eded533fdfd5e8e39b1349439959c...
+valid: true
+changed message: false
+wrong key: false
+random keys differ: true
+random key signs: true
+random_hex length: 32

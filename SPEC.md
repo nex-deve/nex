@@ -496,9 +496,24 @@ these except `net_close`, `net_timeout` and `local_port`.
 | `base64_decode(text)` | Str → Str | error if invalid or not UTF-8 text |
 
 These are implemented in NEX itself and tested against the published
-FIPS 180 and RFC 4231 vectors. There is no public-key cryptography yet
-(signatures with key pairs need a secure random source and are planned).
-See `examples/blockchain.nex` for hashing-based ledgers and HMAC signatures.
+FIPS 180 and RFC 4231 vectors. See `examples/blockchain.nex`.
+
+## 13f. Public-key signatures (Ed25519)
+
+| Function | Type | Notes |
+|---|---|---|
+| `ed25519_keypair()` | → {Str: Str} | keys `secret` and `public`, 64 hex characters each, from the OS random source |
+| `ed25519_public(secret)` | Str → Str | public key for a secret key |
+| `ed25519_sign(secret, message)` | Str, Str → Str | 128-hex-character signature (RFC 8032, deterministic) |
+| `ed25519_verify(public, message, signature)` | Str, Str, Str → Bool | false for a wrong or malformed signature; error for a malformed public key |
+| `random_hex(n)` | Int → Str | `n` (1–1024) secure random bytes as hex |
+| `sha512(text)` | Str → Str | SHA-512, hex |
+
+Secret keys are 32-byte seeds in hex, as in RFC 8032. Random bytes come
+from the operating system (`RtlGenRandom` on Windows, `/dev/urandom`
+elsewhere). The implementation follows TweetNaCl and passes the RFC 8032
+test vectors; it has not been independently audited and is not tuned for
+speed. See `examples/signatures.nex`.
 
 ## 14. Execution model and limits
 

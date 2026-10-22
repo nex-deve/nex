@@ -9,6 +9,9 @@ Not tagged or released yet.
 
 ### Added
 
+- Ed25519 public-key signatures (`ed25519_keypair`, `ed25519_public`,
+  `ed25519_sign`, `ed25519_verify`), `sha512`, `random_hex`; passes the
+  RFC 8032 vectors. `examples/signatures.nex`.
 - Hashing: `sha256`, `hmac_sha256`, `hex_encode`, `base64_encode`,
   `base64_decode` (dependency-free, checked against published vectors);
   `examples/blockchain.nex`.
@@ -55,7 +58,7 @@ Not tagged or released yet.
 ### Known limitations
 
 - No structs/enums, closures or generics.
-- No public-key cryptography or secure random numbers yet. Networking is blocking and single-threaded; the
+- The cryptography has not been independently audited. Networking is blocking and single-threaded; the
   HTTP server handles one request at a time and listens on 127.0.0.1 only.
 - `nex test`, `nex fmt` and `nex repl` are not implemented (exit code 2).
 - The parser stops at the first syntax error.

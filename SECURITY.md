@@ -24,7 +24,8 @@ What the current implementation provides:
 - **Bytecode verification.** Every module, including `.nexdeve` files from
   disk, is verified before running (see docs/ARCHITECTURE.md). Malformed
   bytecode is rejected or produces a runtime error; it must never cause
-  memory unsafety. The implementation contains no `unsafe` Rust code.
+  memory unsafety. The only `unsafe` Rust code is one call to the Windows
+  random source (`RtlGenRandom`) in `ed25519.rs`.
 - **Resource limits.** Call depth (default 1000), value-stack size
   (1,000,000 slots), and string length (16 MiB) are always bounded.
   The instruction count is **unlimited by default**; pass
@@ -43,6 +44,15 @@ What it does **not** provide:
 - The parser and verifier are tested with deterministic randomized inputs
   (`crates/nex-lang/tests/fuzz_smoke.rs`), not with coverage-guided fuzzing
   yet.
+
+## Cryptography
+
+`sha256`, `sha512`, `hmac_sha256` and Ed25519 are implemented in this
+repository without dependencies and pass the published test vectors
+(FIPS 180, RFC 4231, RFC 8032). They have **not** been independently
+audited. Ed25519 follows TweetNaCl's branch-free scalar multiplication,
+but constant-time behaviour has not been measured. Do not rely on them
+for high-value secrets until an audit is done.
 
 ## Packages
 

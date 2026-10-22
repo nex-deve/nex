@@ -10,6 +10,7 @@ pub mod bytecode;
 pub mod compiler;
 pub mod crypto;
 pub mod diag;
+pub mod ed25519;
 pub mod json;
 pub mod lexer;
 pub mod parser;

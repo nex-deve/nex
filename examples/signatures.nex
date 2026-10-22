@@ -1,0 +1,27 @@
+// Ed25519 public-key signatures: sign with a secret key, anyone can
+// verify with the public key.
+//
+// A fixed secret key is used here so the output is always the same; real
+// programs create one with ed25519_keypair() and keep the secret safe.
+
+app Signatures {
+    let secret = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+    let public = ed25519_public(secret)
+    say "public key: {public}"
+
+    let tx = "alice pays bob 10 coins"
+    let sig = ed25519_sign(secret, tx)
+    say "signature: {sig.slice(0, 32)}..."
+    say "valid: {ed25519_verify(public, tx, sig)}"
+    say "changed message: {ed25519_verify(public, "alice pays bob 99 coins", sig)}"
+
+    let other = ed25519_public(sha256("someone else"))
+    say "wrong key: {ed25519_verify(other, tx, sig)}"
+
+    // Fresh random keys are different every time.
+    let a = ed25519_keypair()
+    let b = ed25519_keypair()
+    say "random keys differ: {a["public"] != b["public"]}"
+    say "random key signs: {ed25519_verify(a["public"], tx, ed25519_sign(a["secret"], tx))}"
+    say "random_hex length: {random_hex(16).len()}"
+}

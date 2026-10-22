@@ -366,6 +366,12 @@ id_enum! {
         HexEncode = 44, "hex_encode", 1, false;
         Base64Encode = 45, "base64_encode", 1, false;
         Base64Decode = 46, "base64_decode", 1, false;
+        RandomHex = 47, "random_hex", 1, false;
+        Ed25519Keypair = 48, "ed25519_keypair", 0, false;
+        Ed25519Public = 49, "ed25519_public", 1, false;
+        Ed25519Sign = 50, "ed25519_sign", 2, false;
+        Ed25519Verify = 51, "ed25519_verify", 3, false;
+        Sha512 = 52, "sha512", 1, false;
     }
 }
 

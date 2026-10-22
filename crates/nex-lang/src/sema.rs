@@ -258,6 +258,11 @@ fn builtin_sig(b: Builtin) -> (Vec<Type>, Type) {
             (vec![Type::Str], Type::Str)
         }
         Builtin::HmacSha256 => (vec![Type::Str, Type::Str], Type::Str),
+        Builtin::Sha512 | Builtin::Ed25519Public => (vec![Type::Str], Type::Str),
+        Builtin::RandomHex => (vec![Type::Int], Type::Str),
+        Builtin::Ed25519Keypair => (vec![], Type::map(Type::Str, Type::Str)),
+        Builtin::Ed25519Sign => (vec![Type::Str, Type::Str], Type::Str),
+        Builtin::Ed25519Verify => (vec![Type::Str, Type::Str, Type::Str], Type::Bool),
     }
 }
 

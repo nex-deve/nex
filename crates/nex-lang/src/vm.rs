@@ -410,6 +410,19 @@ fn curl(name: &str, url: &str, post: Option<(&str, &str)>) -> Res<String> {
     Ok(body.to_string())
 }
 
+/// Decode exactly `N` bytes of hex.
+fn unhex<const N: usize>(s: &str, name: &str, what: &str) -> Res<[u8; N]> {
+    let bad = || format!("{name}: the {what} must be {} hex characters", N * 2);
+    if s.len() != N * 2 || !s.is_ascii() {
+        return Err(bad());
+    }
+    let mut out = [0u8; N];
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).map_err(|_| bad())?;
+    }
+    Ok(out)
+}
+
 fn json_kind(v: &Value) -> &'static str {
     match v {
         Value::Unit => "null",
@@ -1477,6 +1490,66 @@ impl Vm<'_, '_> {
                 Ok(Value::Str(Rc::from(crate::crypto::hex(
                     &crate::crypto::hmac_sha256(key.as_bytes(), msg.as_bytes()),
                 ))))
+            }
+            Builtin::Sha512 => {
+                let s = want_str(args.first().ok_or("missing argument")?)?;
+                Ok(Value::Str(Rc::from(crate::crypto::hex(
+                    &crate::ed25519::sha512(s.as_bytes()),
+                ))))
+            }
+            Builtin::RandomHex => {
+                let n = want_int(args.first().ok_or("missing argument")?)?;
+                if !(1..=1024).contains(&n) {
+                    return Err(format!("random_hex({n}): byte count must be 1-1024"));
+                }
+                let mut buf = vec![0u8; n as usize];
+                crate::ed25519::os_random(&mut buf).map_err(|e| format!("random_hex: {e}"))?;
+                Ok(Value::Str(Rc::from(crate::crypto::hex(&buf))))
+            }
+            Builtin::Ed25519Keypair => {
+                let mut seed = [0u8; 32];
+                crate::ed25519::os_random(&mut seed)
+                    .map_err(|e| format!("ed25519_keypair: {e}"))?;
+                let public = crate::ed25519::public_key(&seed);
+                let mut map = BTreeMap::new();
+                map.insert(
+                    Key::Str(Rc::from("secret")),
+                    Value::Str(Rc::from(crate::crypto::hex(&seed))),
+                );
+                map.insert(
+                    Key::Str(Rc::from("public")),
+                    Value::Str(Rc::from(crate::crypto::hex(&public))),
+                );
+                Ok(Value::Map(Rc::new(map)))
+            }
+            Builtin::Ed25519Public => {
+                let s = want_str(args.first().ok_or("missing argument")?)?;
+                let seed: [u8; 32] = unhex(&s, "ed25519_public", "secret key")?;
+                Ok(Value::Str(Rc::from(crate::crypto::hex(
+                    &crate::ed25519::public_key(&seed),
+                ))))
+            }
+            Builtin::Ed25519Sign => {
+                let s = want_str(args.first().ok_or("missing argument")?)?;
+                let msg = want_str(args.get(1).ok_or("missing argument")?)?;
+                let seed: [u8; 32] = unhex(&s, "ed25519_sign", "secret key")?;
+                Ok(Value::Str(Rc::from(crate::crypto::hex(
+                    &crate::ed25519::sign(&seed, msg.as_bytes()),
+                ))))
+            }
+            Builtin::Ed25519Verify => {
+                let p = want_str(args.first().ok_or("missing argument")?)?;
+                let msg = want_str(args.get(1).ok_or("missing argument")?)?;
+                let sig = want_str(args.get(2).ok_or("missing argument")?)?;
+                let public: [u8; 32] = unhex(&p, "ed25519_verify", "public key")?;
+                let Ok(sig) = unhex::<64>(&sig, "ed25519_verify", "signature") else {
+                    return Ok(Value::Bool(false));
+                };
+                Ok(Value::Bool(crate::ed25519::verify(
+                    &public,
+                    msg.as_bytes(),
+                    &sig,
+                )))
             }
             other => Err(format!(
                 "{} is not a pure built-in (invalid bytecode)",
