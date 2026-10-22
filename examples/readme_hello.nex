@@ -1,0 +1,9 @@
+app Hello {
+    let name = "NexDeve"
+    let langs = ["NEX", "Rust", "Dart"]
+
+    say "Hello, {name}!"
+    for lang in langs.sorted() {
+        say "- {lang} has {lang.len()} letters"
+    }
+}

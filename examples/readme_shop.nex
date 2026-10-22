@@ -1,0 +1,13 @@
+app Shop {
+    var cart: [Str] = []
+    cart.push("rice")
+    cart.push("oil")
+    cart.push("rice")
+
+    let prices = {"rice": 75.0, "oil": 180.0}
+    var total = 0.0
+    for item in cart {
+        total = total + prices.get(item, 0.0)
+    }
+    say "{cart.len()} items, total {total}"   // 3 items, total 330.0
+}

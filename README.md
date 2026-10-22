@@ -1,144 +1,207 @@
-# NEX
+<p align="center">
+  <img src="docs/assets/logo.png" alt="NexDeve" width="120">
+</p>
 
-NEX is a small, statically typed programming language with a Rust compiler,
-a bytecode verifier and a stack-based virtual machine.
+<h1 align="center">NEX</h1>
 
-```nex
-app NexDeve {
-    let version = 1
-    say "Hello, NexDeve!"
-    say "NEX version: {version}"
-}
+<p align="center">
+  <b>A fast, safe and simple programming language by <a href="https://nexdeve.com">NexDeve</a>.</b><br>
+  Statically typed · compiled to verified bytecode · written in Rust
+</p>
 
-fn add(a: Int, b: Int) -> Int {
-    return a + b
-}
+<p align="center">
+  <a href="https://github.com/nex-deve/nex/actions/workflows/ci.yml"><img src="https://github.com/nex-deve/nex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/version-0.1.0--alpha.1-orange" alt="Version 0.1.0-alpha.1">
+  <img src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-blue" alt="Platforms: Linux, Windows, macOS">
+  <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-green" alt="License: MIT or Apache-2.0"></a>
+</p>
 
-app Calculator {
-    say add(10, 20)
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#a-taste-of-nex">Examples</a> ·
+  <a href="SPEC.md">Language spec</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="https://nexdeve.com">nexdeve.com</a>
+</p>
+
+---
+
+```rust
+app Hello {
+    let name = "NexDeve"
+    let langs = ["NEX", "Rust", "Dart"]
+
+    say "Hello, {name}!"
+    for lang in langs.sorted() {
+        say "- {lang} has {lang.len()} letters"
+    }
 }
 ```
 
 ```console
-$ nex run examples/hello.nex
+$ nex run hello.nex
 Hello, NexDeve!
-NEX version: 1
-30
+- Dart has 4 letters
+- NEX has 3 letters
+- Rust has 4 letters
 ```
 
-## Status: alpha (0.1.0-alpha.1)
+## Why NEX?
 
-NEX is **not production-ready**. What works today, with tests:
+| | |
+|---|---|
+| **Simple** | Small, readable syntax: `let`, `var`, `fn`, `if`, `for`, `say`. No semicolons needed. |
+| **Safe** | Static types catch mistakes before the program runs. Integer overflow, out-of-bounds indexes and missing map keys are clear errors, never silent bugs or crashes. |
+| **Verified** | Every program is compiled to bytecode and checked by a verifier before the VM runs it, including bytecode loaded from files. |
+| **Helpful errors** | Every error shows the file, line, column and the exact spot in your code. |
+| **Portable** | Tested on Linux, Windows and macOS on every change. No dependencies beyond Rust. |
 
-- `Int`, `Float`, `Bool`, `Str`; `let`/`var`; arithmetic with checked
-  integer overflow; comparisons; `&&`/`||` with short-circuiting
-- arrays `[T]` and maps `{K: V}` with indexing, element assignment and
-  methods (`push`, `pop`, `sorted`, `keys`, `get`, ...); string methods
-  (`split`, `trim`, `replace`, `upper`, ...)
-- functions, recursion, `if`/`else if`/`else`, `while`, `for` (ranges,
-  arrays, map keys), `break`, `continue`
-- static type checking with inference, string interpolation
-- multiple `app` entry points per file
-- compile errors with line, column and source snippet; runtime errors with
-  a call trace
-- `nex run`, `check`, `build` (→ `.nexdeve` bytecode file), `disasm`, `new`
+> **Status: alpha.** NEX is young and not production-ready yet. Everything
+> listed under [Features](#features) works and is tested; file I/O,
+> modules, networking and more are on the [roadmap](ROADMAP.md).
 
-Not implemented yet: structs, closures, error values, modules/imports
-(`use` reports "unresolved module"), file/network I/O, JSON, `nex test`,
-`nex fmt`, `nex repl`, package management, the VS Code extension.
-See [ROADMAP.md](ROADMAP.md).
+## Quick start
 
-**Tested environments:** the full test suite passes in GitHub Actions on
-`ubuntu-latest`, `windows-latest` and `macos-latest` (stable Rust), and
-locally on Windows 11 x86_64 with rustc 1.99.1 (`x86_64-pc-windows-gnu`).
-There are no prebuilt binaries yet; build from source.
-
-## Install from source
-
-Requires a stable Rust toolchain.
+NEX is built from source with a stable [Rust](https://rustup.rs) toolchain.
 
 ```sh
 git clone https://github.com/nex-deve/nex.git
 cd nex
-cargo build --release
-# binary: target/release/nex (nex.exe on Windows)
-cargo install --path crates/nex-cli    # optional: puts `nex` on PATH
+cargo install --path crates/nex-cli   # installs the `nex` command
 ```
 
-On Windows the default MSVC toolchain also needs Visual Studio Build Tools
-*with the Windows SDK*. If linking fails, see
-[CONTRIBUTING.md](CONTRIBUTING.md#windows-notes).
+Create and run your first project:
 
-There are no prebuilt binaries yet.
-
-## Usage
-
+```sh
+nex new hello
+cd hello
+nex run
 ```
-nex run [FILE] [--app NAME] [--max-steps N] [--max-call-depth N]
-nex check [FILE]
-nex build [FILE] [-o OUT.nexdeve]
-nex disasm [FILE]
-nex new NAME
-nex --help | --version
+
+> **Windows:** the default Rust (MSVC) toolchain needs Visual Studio Build
+> Tools with the Windows SDK. If linking fails, see
+> [CONTRIBUTING.md](CONTRIBUTING.md#windows-notes).
+
+## A taste of NEX
+
+**Functions and types**
+
+```rust
+fn grade(score: Int) -> Str {
+    if score >= 80 {
+        return "A"
+    } else if score >= 60 {
+        return "B"
+    }
+    return "C"
+}
+
+app Grades {
+    let scores = {"Rahad": 91, "Ana": 74, "Sam": 55}
+    for name in scores {
+        say "{name}: {grade(scores[name])}"
+    }
+}
 ```
+
+**Collections**
+
+```rust
+app Shop {
+    var cart: [Str] = []
+    cart.push("rice")
+    cart.push("oil")
+    cart.push("rice")
+
+    let prices = {"rice": 75.0, "oil": 180.0}
+    var total = 0.0
+    for item in cart {
+        total = total + prices.get(item, 0.0)
+    }
+    say "{cart.len()} items, total {total}"   // 3 items, total 330.0
+}
+```
+
+**Clear errors**
+
+```console
+$ nex run divide.nex
+runtime error: division by zero
+  at fn divide (divide.nex:2:14)
+  at app Main (divide.nex:7:9)
+ --> divide.nex:2:14
+  |
+2 |     return a / b
+  |              ^
+```
+
+More programs live in [`examples/`](examples). Every example is run by the
+test suite, so they always work.
+
+## Features
+
+- **Types:** `Int`, `Float`, `Bool`, `Str`, arrays `[T]`, maps `{K: V}`
+- **Variables:** `let` (fixed) and `var` (changeable), with type inference
+- **Control flow:** `if` / `else if` / `else`, `while`, `for` over ranges,
+  arrays and maps, `break`, `continue`
+- **Functions** with typed parameters, return values and recursion
+- **String interpolation:** `"total: {a + b}"`
+- **Methods:** `push`, `pop`, `sorted`, `slice`, `keys`, `get`, `split`,
+  `trim`, `replace`, `upper`, and [more](SPEC.md#9-methods)
+- **Built-ins:** `sqrt`, `floor`, `round`, `parse_int`, `parse_float`,
+  `to_int`, `to_float`
+- **Tooling:** `nex run`, `check`, `build`, `disasm`, `new`
+
+## Command line
 
 | Command | What it does |
 |---|---|
-| `run` | Compiles a `.nex` file (or loads a `.nexdeve` file), verifies the bytecode, then runs every app in order, or only `--app NAME`. Nothing runs if compilation fails. |
-| `check` | Reports syntax, name and type errors without running anything. Prints `ok: ...` on success. |
-| `build` | Writes a verified bytecode file (default: same name with `.nexdeve`). Run it with `nex run file.nexdeve`; the source is not needed. A `.nexdeve` file is bytecode for the NEX VM, not a native executable. |
-| `disasm` | Prints the bytecode of a `.nex` or `.nexdeve` file. |
-| `new` | Creates `NAME/nex.toml`, `NAME/src/main.nex` and `.gitignore`. Inside a project directory, `run`, `check`, `build` and `disasm` use `src/main.nex` when no file is given; `build` writes `target/main.nexdeve`. |
+| `nex run [FILE]` | Compile and run a `.nex` file (or a built `.nexdeve` file) |
+| `nex check [FILE]` | Find errors without running anything |
+| `nex build [FILE]` | Compile to a verified `.nexdeve` bytecode file that runs without the source |
+| `nex disasm [FILE]` | Show the bytecode |
+| `nex new NAME` | Create a new project |
 
-### Exit codes
+Useful options: `--app NAME` runs one app; `--max-steps N` and
+`--max-call-depth N` limit untrusted programs. Run `nex --help` for details.
+
+<details>
+<summary>Exit codes</summary>
 
 | Code | Meaning |
 |---|---|
 | 0 | success |
-| 1 | compile error (syntax, name, type), or `run` on a file with no app |
+| 1 | compile error (syntax, name, type), or no `app` to run |
 | 2 | usage error, unreadable file, or unimplemented command |
 | 3 | runtime error (overflow, division by zero, resource limit) |
 | 4 | invalid or corrupted `.nexdeve` file |
 
-## Language tour
+</details>
 
-```nex
-// Functions need parameter types; the return type defaults to Unit.
-fn label(n: Int) -> Str {
-    if n % 15 == 0 {
-        return "FizzBuzz"
-    } else if n % 3 == 0 {
-        return "Fizz"
-    }
-    return "{n}"                 // interpolation turns any value into text
-}
+## Roadmap
 
-app Demo {
-    let limit = 5                // immutable
-    var i = 1                    // mutable
-    while i <= limit {
-        say label(i)
-        i = i + 1
-    }
-    say "done: " + "ok"          // Str + Str concatenation
-    say 9223372036854775807 + 1  // runtime error: integer overflow
-}
-```
+| Stage | What it adds | Status |
+|---|---|---|
+| 1 | Core language, functions, arrays, maps, floats, `for` | ✅ done |
+| 2 | File I/O, user input, modules (`use`), error handling | ⏳ next |
+| 3 | HTTP and JSON (websites, APIs, bots) | planned |
+| 4 | Hashing and networking (blockchain experiments, network tools) | planned |
+| 5 | Hardware access (serial / GPIO) | planned |
 
-The full rules are in [SPEC.md](SPEC.md). More examples are in
-[`examples/`](examples); every one is run by the test suite.
+Full details in [ROADMAP.md](ROADMAP.md).
 
 ## Documentation
 
-- [SPEC.md](SPEC.md) — grammar, types, semantics, limits
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — compiler pipeline,
-  bytecode instruction set, verifier, VM, `.nexdeve` format
-- [SECURITY.md](SECURITY.md) — what the VM does and does not protect against
-- [ROADMAP.md](ROADMAP.md) — milestones and their status
-- [CONTRIBUTING.md](CONTRIBUTING.md) — building, testing, adding tests
-- [CHANGELOG.md](CHANGELOG.md)
+- [Language specification](SPEC.md): grammar, types, methods, limits
+- [Architecture](docs/ARCHITECTURE.md): compiler pipeline, bytecode, VM
+- [Security](SECURITY.md): what the VM protects against, and what it doesn't
+- [Contributing](CONTRIBUTING.md): building, testing and adding tests
+- [Changelog](CHANGELOG.md)
 
-## Development
+## Contributing
+
+Bug reports and ideas are welcome. Please open an
+[issue](https://github.com/nex-deve/nex/issues). Before sending a change, run:
 
 ```sh
 cargo fmt --all --check
@@ -146,14 +209,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-The tests are unit tests for each compiler stage, golden programs in
-`tests/programs/` (expected output or expected error for each `.nex`
-file), the examples, end-to-end CLI tests, and deterministic randomized
-robustness tests for the parser, verifier, VM and `.nexdeve` decoder.
-
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
 [MIT license](LICENSE-MIT), at your option. Unless you state otherwise,
 any contribution you submit for inclusion in NEX is dual-licensed the same
 way, without any additional terms.
+
+<p align="center">Made by <a href="https://nexdeve.com">NexDeve</a></p>

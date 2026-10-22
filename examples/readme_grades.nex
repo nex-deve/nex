@@ -1,0 +1,15 @@
+fn grade(score: Int) -> Str {
+    if score >= 80 {
+        return "A"
+    } else if score >= 60 {
+        return "B"
+    }
+    return "C"
+}
+
+app Grades {
+    let scores = {"Rahad": 91, "Ana": 74, "Sam": 55}
+    for name in scores {
+        say "{name}: {grade(scores[name])}"
+    }
+}
