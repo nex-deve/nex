@@ -55,6 +55,12 @@ below it first, and none is claimed until it has tests.
 
 - [x] TCP client and server, UDP, DNS lookup, read timeouts
 
+## Hashing: **done**
+
+- [x] SHA-256, HMAC-SHA-256, hex, base64 (tested against FIPS 180 / RFC 4231)
+- [x] Blockchain example: linked blocks, proof-of-work, validation, HMAC signatures
+- [ ] Public-key signatures (Ed25519) and a secure random source
+
 ## Milestone D — tooling: **partial**
 
 - [x] `nex new` (creates `nex.toml`, `src/main.nex`)

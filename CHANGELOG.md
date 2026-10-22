@@ -9,6 +9,9 @@ Not tagged or released yet.
 
 ### Added
 
+- Hashing: `sha256`, `hmac_sha256`, `hex_encode`, `base64_encode`,
+  `base64_decode` (dependency-free, checked against published vectors);
+  `examples/blockchain.nex`.
 - Stage 4 (networking): TCP `tcp_listen` / `tcp_accept` / `tcp_connect` /
   `tcp_send` / `tcp_recv` / `tcp_recv_line`; UDP `udp_bind` / `udp_send` /
   `udp_recv`; `net_close`, `net_timeout`, `local_port`, `resolve`.
@@ -52,7 +55,7 @@ Not tagged or released yet.
 ### Known limitations
 
 - No structs/enums, closures or generics.
-- No hashing/crypto yet. Networking is blocking and single-threaded; the
+- No public-key cryptography or secure random numbers yet. Networking is blocking and single-threaded; the
   HTTP server handles one request at a time and listens on 127.0.0.1 only.
 - `nex test`, `nex fmt` and `nex repl` are not implemented (exit code 2).
 - The parser stops at the first syntax error.

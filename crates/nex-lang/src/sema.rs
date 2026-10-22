@@ -254,6 +254,10 @@ fn builtin_sig(b: Builtin) -> (Vec<Type>, Type) {
         Builtin::UdpRecv => (vec![Type::Int, Type::Int], Type::map(Type::Str, Type::Str)),
         Builtin::NetTimeout => (vec![Type::Int, Type::Int], Type::Unit),
         Builtin::Resolve => (vec![Type::Str], Type::array(Type::Str)),
+        Builtin::Sha256 | Builtin::HexEncode | Builtin::Base64Encode | Builtin::Base64Decode => {
+            (vec![Type::Str], Type::Str)
+        }
+        Builtin::HmacSha256 => (vec![Type::Str, Type::Str], Type::Str),
     }
 }
 

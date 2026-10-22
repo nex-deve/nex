@@ -1,0 +1,73 @@
+// A tiny blockchain: blocks linked by SHA-256 hashes, proof-of-work
+// mining, validation, tamper detection and HMAC-signed transactions.
+
+fn block_hash(index: Int, prev: Str, data: Str, nonce: Int) -> Str {
+    return sha256("{index}|{prev}|{data}|{nonce}")
+}
+
+// Find a nonce whose hash starts with `difficulty` zeros.
+fn mine(index: Int, prev: Str, data: Str, difficulty: Int) -> {Str: Str} {
+    var target = ""
+    for i in 0..difficulty {
+        target = target + "0"
+    }
+    var nonce = 0
+    while true {
+        let hash = block_hash(index, prev, data, nonce)
+        if hash.starts_with(target) {
+            return {
+                "index": "{index}",
+                "prev": prev,
+                "data": data,
+                "nonce": "{nonce}",
+                "hash": hash
+            }
+        }
+        nonce = nonce + 1
+    }
+    fail "unreachable"
+}
+
+fn valid(chain: [{Str: Str}]) -> Bool {
+    for i in 0..chain.len() {
+        let b = chain[i]
+        let expected = block_hash(parse_int(b["index"]), b["prev"], b["data"], parse_int(b["nonce"]))
+        if b["hash"] != expected {
+            return false
+        }
+        if i > 0 && b["prev"] != chain[i - 1]["hash"] {
+            return false
+        }
+    }
+    return true
+}
+
+fn sign(secret: Str, message: Str) -> Str {
+    return hmac_sha256(secret, message)
+}
+
+app Blockchain {
+    let secret = "alice-private-key"
+    let tx1 = "alice pays bob 10"
+    let tx2 = "bob pays carol 4"
+
+    var chain: [{Str: Str}] = []
+    chain.push(mine(0, "0", "genesis", 2))
+    chain.push(mine(1, chain[0]["hash"], "{tx1} sig={sign(secret, tx1)}", 2))
+    chain.push(mine(2, chain[1]["hash"], "{tx2} sig={sign(secret, tx2)}", 2))
+
+    for b in chain {
+        say "block {b["index"]} nonce={b["nonce"]} hash={b["hash"].slice(0, 16)}..."
+    }
+    say "chain valid: {valid(chain)}"
+
+    // Signature check: the same secret gives the same signature.
+    let claimed = sign(secret, tx1)
+    say "signature ok: {claimed == sign("alice-private-key", tx1)}"
+    say "forged signature ok: {claimed == sign("mallory", tx1)}"
+
+    // Tampering with any block breaks the chain.
+    var forged = chain
+    forged[1]["data"] = "alice pays mallory 1000"
+    say "after tampering: {valid(forged)}"
+}

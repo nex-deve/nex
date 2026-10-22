@@ -56,8 +56,8 @@ Hello, NexDeve!
 | **Portable** | Tested on Linux, Windows and macOS on every change. No dependencies beyond Rust. |
 
 > **Status: alpha.** NEX is young and not production-ready yet. Everything
-> listed under [Features](#features) works and is tested; hashing,
-> hardware access and more are on the [roadmap](ROADMAP.md).
+> listed under [Features](#features) works and is tested; public-key
+> crypto, hardware access and more are on the [roadmap](ROADMAP.md).
 
 ## How NEX runs your code
 
@@ -170,6 +170,8 @@ test suite, so they always work.
   `http_respond`) for websites, APIs and bots
 - **Networking:** TCP (`tcp_listen`, `tcp_connect`, `tcp_send`, `tcp_recv_line`, ...),
   UDP (`udp_bind`, `udp_send`, `udp_recv`) and DNS (`resolve`)
+- **Hashing:** `sha256`, `hmac_sha256`, `hex_encode`, `base64_encode` / `base64_decode`,
+  with a working [blockchain example](examples/blockchain.nex)
 - **Tooling:** `nex run`, `check`, `build`, `disasm`, `new`
 
 ## Command line
@@ -211,7 +213,8 @@ a time. This table shows honestly where each goal stands today.
 | **Bigger programs** | Projects split into modules with `use`, proper error handling | ✅ available now |
 | **Websites and APIs** | HTTP servers and clients, JSON, bots | ✅ available now |
 | **Networking** | TCP / UDP tools and services | ✅ available now |
-| **Blockchain** | Hashing (SHA-256), signatures, ledgers and experiments | ⏳ stage 4 (next) |
+| **Blockchain** | SHA-256 hashing, HMAC signatures, ledgers and proof-of-work experiments | ✅ available now |
+| **Public-key crypto** | Key pairs and public-key signatures (Ed25519) | 🗓️ planned |
 | **Apps** | Desktop and web front ends | 🗓️ later |
 | **Robotics and hardware** | Serial ports, GPIO, sensors and motors | 🗓️ stage 5 |
 | **Packages** | Share and install NEX libraries | 🗓️ later |

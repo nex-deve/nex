@@ -485,6 +485,21 @@ net_close(conn)
 All failures are catchable runtime errors. `--sandbox` blocks all of
 these except `net_close`, `net_timeout` and `local_port`.
 
+## 13e. Hashing and encoding
+
+| Function | Type | Notes |
+|---|---|---|
+| `sha256(text)` | Str → Str | SHA-256 of the UTF-8 bytes, lower-case hex |
+| `hmac_sha256(key, text)` | Str, Str → Str | HMAC-SHA-256 (RFC 2104), lower-case hex |
+| `hex_encode(text)` | Str → Str | hex of the UTF-8 bytes |
+| `base64_encode(text)` | Str → Str | standard alphabet with `=` padding |
+| `base64_decode(text)` | Str → Str | error if invalid or not UTF-8 text |
+
+These are implemented in NEX itself and tested against the published
+FIPS 180 and RFC 4231 vectors. There is no public-key cryptography yet
+(signatures with key pairs need a secure random source and are planned).
+See `examples/blockchain.nex` for hashing-based ledgers and HMAC signatures.
+
 ## 14. Execution model and limits
 
 Programs are compiled to bytecode, verified, then run on a stack VM (see

@@ -1,0 +1,15 @@
+app Crypto {
+    say sha256("")
+    say sha256("abc")
+    say sha256("নেক্স")
+    say hmac_sha256("Jefe", "what do ya want for nothing?")
+    say hex_encode("NEX!")
+    say base64_encode("hello, world")
+    say base64_decode("aGVsbG8sIHdvcmxk")
+    say base64_decode(base64_encode("বাংলা ✓"))
+    try {
+        say base64_decode("not base64!")
+    } catch e {
+        say e
+    }
+}

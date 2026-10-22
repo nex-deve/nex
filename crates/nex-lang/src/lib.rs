@@ -8,6 +8,7 @@ pub mod artifact;
 pub mod ast;
 pub mod bytecode;
 pub mod compiler;
+pub mod crypto;
 pub mod diag;
 pub mod json;
 pub mod lexer;

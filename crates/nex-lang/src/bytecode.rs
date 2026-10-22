@@ -361,6 +361,11 @@ id_enum! {
         LocalPort = 39, "local_port", 1, false;
         NetTimeout = 40, "net_timeout", 2, false;
         Resolve = 41, "resolve", 1, false;
+        Sha256 = 42, "sha256", 1, false;
+        HmacSha256 = 43, "hmac_sha256", 2, false;
+        HexEncode = 44, "hex_encode", 1, false;
+        Base64Encode = 45, "base64_encode", 1, false;
+        Base64Decode = 46, "base64_decode", 1, false;
     }
 }
 

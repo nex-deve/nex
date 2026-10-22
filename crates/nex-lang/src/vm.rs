@@ -1457,6 +1457,27 @@ impl Vm<'_, '_> {
                 self.str_value(text)
             }
             Builtin::Json => Ok(args.first().ok_or("missing argument")?.clone()),
+            Builtin::Sha256
+            | Builtin::HexEncode
+            | Builtin::Base64Encode
+            | Builtin::Base64Decode => {
+                let s = want_str(args.first().ok_or("missing argument")?)?;
+                let out = match b {
+                    Builtin::Sha256 => crate::crypto::hex(&crate::crypto::sha256(s.as_bytes())),
+                    Builtin::HexEncode => crate::crypto::hex(s.as_bytes()),
+                    Builtin::Base64Encode => crate::crypto::base64_encode(s.as_bytes()),
+                    _ => String::from_utf8(crate::crypto::base64_decode(&s)?)
+                        .map_err(|_| "base64_decode: the data is not UTF-8 text".to_string())?,
+                };
+                self.str_value(out)
+            }
+            Builtin::HmacSha256 => {
+                let key = want_str(args.first().ok_or("missing argument")?)?;
+                let msg = want_str(args.get(1).ok_or("missing argument")?)?;
+                Ok(Value::Str(Rc::from(crate::crypto::hex(
+                    &crate::crypto::hmac_sha256(key.as_bytes(), msg.as_bytes()),
+                ))))
+            }
             other => Err(format!(
                 "{} is not a pure built-in (invalid bytecode)",
                 other.name()
