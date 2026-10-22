@@ -1,0 +1,20 @@
+// A small network tool: check which TCP ports are open on a host.
+// Usage: nex run port_check.nex -- 127.0.0.1 22 80 443 8080
+app PortCheck {
+    let a = args()
+    if a.len() < 2 {
+        eprint("usage: nex run port_check.nex -- HOST PORT...")
+        exit(2)
+    }
+    let host = a[0]
+    for i in 1..a.len() {
+        let port = parse_int(a[i])
+        try {
+            let c = tcp_connect(host, port)
+            net_close(c)
+            say "{host}:{port} open"
+        } catch e {
+            say "{host}:{port} closed"
+        }
+    }
+}

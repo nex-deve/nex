@@ -51,6 +51,10 @@ below it first, and none is claimed until it has tests.
 - [x] Error handling: `fail`, `try` / `catch` across calls
 - [x] `--sandbox` mode that disables file and environment access
 
+## Networking: **done**
+
+- [x] TCP client and server, UDP, DNS lookup, read timeouts
+
 ## Milestone D — tooling: **partial**
 
 - [x] `nex new` (creates `nex.toml`, `src/main.nex`)

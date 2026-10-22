@@ -348,6 +348,19 @@ id_enum! {
         HttpPort = 26, "http_port", 1, false;
         HttpAccept = 27, "http_accept", 1, false;
         HttpRespond = 28, "http_respond", 4, false;
+        TcpConnect = 29, "tcp_connect", 2, false;
+        TcpListen = 30, "tcp_listen", 2, false;
+        TcpAccept = 31, "tcp_accept", 1, false;
+        TcpSend = 32, "tcp_send", 2, false;
+        TcpRecv = 33, "tcp_recv", 2, false;
+        TcpRecvLine = 34, "tcp_recv_line", 1, false;
+        NetClose = 35, "net_close", 1, false;
+        UdpBind = 36, "udp_bind", 2, false;
+        UdpSend = 37, "udp_send", 4, false;
+        UdpRecv = 38, "udp_recv", 2, false;
+        LocalPort = 39, "local_port", 1, false;
+        NetTimeout = 40, "net_timeout", 2, false;
+        Resolve = 41, "resolve", 1, false;
     }
 }
 

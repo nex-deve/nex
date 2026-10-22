@@ -57,7 +57,7 @@ Hello, NexDeve!
 
 > **Status: alpha.** NEX is young and not production-ready yet. Everything
 > listed under [Features](#features) works and is tested; hashing,
-> sockets, hardware access and more are on the [roadmap](ROADMAP.md).
+> hardware access and more are on the [roadmap](ROADMAP.md).
 
 ## How NEX runs your code
 
@@ -168,6 +168,8 @@ test suite, so they always work.
 - **JSON:** `json_parse`, `to_json` and a `Json` type with `.get`, `.at`, `.str`, `.int`, ...
 - **HTTP:** `http_get` / `http_post` clients and a small server (`http_listen`, `http_accept`,
   `http_respond`) for websites, APIs and bots
+- **Networking:** TCP (`tcp_listen`, `tcp_connect`, `tcp_send`, `tcp_recv_line`, ...),
+  UDP (`udp_bind`, `udp_send`, `udp_recv`) and DNS (`resolve`)
 - **Tooling:** `nex run`, `check`, `build`, `disasm`, `new`
 
 ## Command line
@@ -208,7 +210,7 @@ a time. This table shows honestly where each goal stands today.
 | **Automation** | Scripts that read and write files, take input, process reports | ✅ available now |
 | **Bigger programs** | Projects split into modules with `use`, proper error handling | ✅ available now |
 | **Websites and APIs** | HTTP servers and clients, JSON, bots | ✅ available now |
-| **Networking** | TCP / UDP tools and services | ⏳ stage 4 (next) |
+| **Networking** | TCP / UDP tools and services | ✅ available now |
 | **Blockchain** | Hashing (SHA-256), signatures, ledgers and experiments | ⏳ stage 4 (next) |
 | **Apps** | Desktop and web front ends | 🗓️ later |
 | **Robotics and hardware** | Serial ports, GPIO, sensors and motors | 🗓️ stage 5 |

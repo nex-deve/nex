@@ -1,0 +1,9 @@
+hello server
+second line
+PONG
+tcp_recv_line: the connection is closed
+tcp_send: no open socket with handle 1
+ping over udp
+true
+udp_recv: timed out
+true

@@ -242,6 +242,18 @@ fn builtin_sig(b: Builtin) -> (Vec<Type>, Type) {
         Builtin::HttpPort => (vec![Type::Int], Type::Int),
         Builtin::HttpAccept => (vec![Type::Int], Type::map(Type::Str, Type::Str)),
         Builtin::HttpRespond => (vec![Type::Str, Type::Int, Type::Str, Type::Str], Type::Unit),
+        Builtin::TcpConnect | Builtin::TcpListen | Builtin::UdpBind => {
+            (vec![Type::Str, Type::Int], Type::Int)
+        }
+        Builtin::TcpAccept | Builtin::LocalPort => (vec![Type::Int], Type::Int),
+        Builtin::TcpSend => (vec![Type::Int, Type::Str], Type::Unit),
+        Builtin::TcpRecv => (vec![Type::Int, Type::Int], Type::Str),
+        Builtin::TcpRecvLine => (vec![Type::Int], Type::Str),
+        Builtin::NetClose => (vec![Type::Int], Type::Unit),
+        Builtin::UdpSend => (vec![Type::Int, Type::Str, Type::Int, Type::Str], Type::Unit),
+        Builtin::UdpRecv => (vec![Type::Int, Type::Int], Type::map(Type::Str, Type::Str)),
+        Builtin::NetTimeout => (vec![Type::Int, Type::Int], Type::Unit),
+        Builtin::Resolve => (vec![Type::Str], Type::array(Type::Str)),
     }
 }
 

@@ -18,7 +18,9 @@ What the current implementation provides:
   program can only use standard input/output, `args`, `exit` and time.
   Programs can also make HTTP requests (through the system `curl`,
   restricted to http/https) and run a local HTTP server bound to
-  127.0.0.1. `--sandbox` blocks files, environment and network.
+  127.0.0.1, and open raw TCP/UDP sockets (`tcp_listen("0.0.0.0", ...)`.
+  listens on every interface, so only do that on purpose). `--sandbox`
+  blocks files, environment and network.
 - **Bytecode verification.** Every module, including `.nexdeve` files from
   disk, is verified before running (see docs/ARCHITECTURE.md). Malformed
   bytecode is rejected or produces a runtime error; it must never cause

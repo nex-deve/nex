@@ -453,6 +453,38 @@ The server only listens on the local machine. To serve the internet, put
 it behind a reverse proxy (nginx, Caddy). Request heads are limited to
 64 KiB and bodies to 16 MiB; a malformed request gets `400` automatically.
 
+## 13d. TCP and UDP
+
+Sockets are `Int` handles. Data is sent and received as text (received
+bytes that are not valid UTF-8 are replaced with `U+FFFD`).
+
+```
+let server = tcp_listen("127.0.0.1", 9000)
+let conn = tcp_accept(server)
+let line = tcp_recv_line(conn)
+tcp_send(conn, "you said: {line}\n")
+net_close(conn)
+```
+
+| Function | Type | Notes |
+|---|---|---|
+| `tcp_listen(host, port)` | Str, Int → Int | listener; `"0.0.0.0"` listens on all interfaces, port `0` picks a free port |
+| `tcp_accept(listener)` | Int → Int | waits for a connection |
+| `tcp_connect(host, port)` | Str, Int → Int | 10 second connect timeout per address |
+| `tcp_send(conn, text)` | Int, Str → Unit | |
+| `tcp_recv(conn, max_bytes)` | Int, Int → Str | waits for data; returns up to `max_bytes`; `""` when the other side closed |
+| `tcp_recv_line(conn)` | Int → Str | one line without `\n`; error if the connection is closed |
+| `udp_bind(host, port)` | Str, Int → Int | UDP socket |
+| `udp_send(sock, host, port, text)` | Int, Str, Int, Str → Unit | |
+| `udp_recv(sock, max_bytes)` | Int, Int → {Str: Str} | keys `data`, `host`, `port` |
+| `net_timeout(sock, ms)` | Int, Int → Unit | read timeout for receives (`0` = wait forever); a timeout is the error `... timed out` |
+| `local_port(sock)` | Int → Int | port of any socket |
+| `net_close(sock)` | Int → Unit | |
+| `resolve(host)` | Str → [Str] | IP addresses from DNS |
+
+All failures are catchable runtime errors. `--sandbox` blocks all of
+these except `net_close`, `net_timeout` and `local_port`.
+
 ## 14. Execution model and limits
 
 Programs are compiled to bytecode, verified, then run on a stack VM (see

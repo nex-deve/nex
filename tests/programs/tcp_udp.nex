@@ -1,0 +1,40 @@
+app Network {
+    // TCP: a server and a client in one program
+    let server = tcp_listen("127.0.0.1", 0)
+    let port = local_port(server)
+    let client = tcp_connect("127.0.0.1", port)
+    let conn = tcp_accept(server)
+    tcp_send(client, "hello server\nsecond line\n")
+    say tcp_recv_line(conn)
+    say tcp_recv_line(conn)
+    tcp_send(conn, "PONG")
+    say tcp_recv(client, 100)
+    net_close(client)
+    try {
+        say tcp_recv_line(conn)
+    } catch e {
+        say e
+    }
+    net_close(conn)
+    net_close(server)
+    try {
+        tcp_send(client, "x")
+    } catch e {
+        say e
+    }
+
+    // UDP
+    let a = udp_bind("127.0.0.1", 0)
+    let b = udp_bind("127.0.0.1", 0)
+    udp_send(a, "127.0.0.1", local_port(b), "ping over udp")
+    let msg = udp_recv(b, 1024)
+    say msg["data"]
+    say msg["port"] == "{local_port(a)}"
+    net_timeout(b, 50)
+    try {
+        say udp_recv(b, 10)
+    } catch e {
+        say e
+    }
+    say resolve("localhost").len() > 0
+}

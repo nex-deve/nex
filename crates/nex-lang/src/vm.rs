@@ -217,12 +217,66 @@ impl<'h> Host<'h> {
     }
 }
 
-/// HTTP server state owned by a [`Host`].
+/// Network state owned by a [`Host`]: HTTP servers, pending HTTP requests
+/// and TCP/UDP sockets.
 #[derive(Default)]
 pub struct Net {
     listeners: Vec<std::net::TcpListener>,
     pending: std::collections::HashMap<String, std::net::TcpStream>,
     next_id: u64,
+    /// TCP/UDP handles; closed ones become `None`.
+    sockets: Vec<Option<Socket>>,
+}
+
+enum Socket {
+    Listener(std::net::TcpListener),
+    Stream(std::io::BufReader<std::net::TcpStream>),
+    Udp(std::net::UdpSocket),
+}
+
+/// Largest read `tcp_recv` / `udp_recv` performs at once.
+const MAX_READ: i64 = 16 * 1024 * 1024;
+
+fn net_err(name: &str, e: std::io::Error) -> String {
+    match e.kind() {
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => {
+            format!("{name}: timed out")
+        }
+        _ => format!("{name}: {e}"),
+    }
+}
+
+fn port_arg(name: &str, port: i64) -> Res<u16> {
+    u16::try_from(port).map_err(|_| format!("{name}: port {port} must be 0-65535"))
+}
+
+impl Net {
+    fn add(&mut self, s: Socket) -> Value {
+        self.sockets.push(Some(s));
+        Value::Int(self.sockets.len() as i64 - 1)
+    }
+
+    fn get(&mut self, name: &str, h: i64) -> Res<&mut Socket> {
+        usize::try_from(h)
+            .ok()
+            .and_then(|i| self.sockets.get_mut(i))
+            .and_then(Option::as_mut)
+            .ok_or_else(|| format!("{name}: no open socket with handle {h}"))
+    }
+
+    fn stream(&mut self, name: &str, h: i64) -> Res<&mut std::io::BufReader<std::net::TcpStream>> {
+        match self.get(name, h)? {
+            Socket::Stream(s) => Ok(s),
+            _ => Err(format!("{name}: handle {h} is not a TCP connection")),
+        }
+    }
+
+    fn udp(&mut self, name: &str, h: i64) -> Res<&std::net::UdpSocket> {
+        match self.get(name, h)? {
+            Socket::Udp(s) => Ok(s),
+            _ => Err(format!("{name}: handle {h} is not a UDP socket")),
+        }
+    }
 }
 
 /// Largest request body `http_accept` reads.
@@ -576,6 +630,16 @@ impl Vm<'_, '_> {
                 | Builtin::HttpListen
                 | Builtin::HttpAccept
                 | Builtin::HttpRespond
+                | Builtin::TcpConnect
+                | Builtin::TcpListen
+                | Builtin::TcpAccept
+                | Builtin::TcpSend
+                | Builtin::TcpRecv
+                | Builtin::TcpRecvLine
+                | Builtin::UdpBind
+                | Builtin::UdpSend
+                | Builtin::UdpRecv
+                | Builtin::Resolve
         );
         if io_needed && !self.host.allow_io {
             return Err(format!(
@@ -584,11 +648,176 @@ impl Vm<'_, '_> {
             ));
         }
         let int = |i: usize| want_int(args.get(i).ok_or("missing argument (invalid bytecode)")?);
-        if matches!(b, Builtin::HttpAccept | Builtin::SleepMs) {
+        if matches!(
+            b,
+            Builtin::HttpAccept
+                | Builtin::SleepMs
+                | Builtin::TcpAccept
+                | Builtin::TcpRecv
+                | Builtin::TcpRecvLine
+                | Builtin::UdpRecv
+        ) {
             // Show everything printed so far before waiting.
             let _ = self.host.out.flush();
         }
         match b {
+            Builtin::TcpConnect => {
+                use std::net::ToSocketAddrs;
+                let (host, port) = (s(0)?, port_arg("tcp_connect", int(1)?)?);
+                let addrs = (&*host, port)
+                    .to_socket_addrs()
+                    .map_err(|e| net_err("tcp_connect", e))?;
+                let mut last = format!("tcp_connect: cannot resolve {host:?}");
+                for addr in addrs {
+                    match std::net::TcpStream::connect_timeout(
+                        &addr,
+                        std::time::Duration::from_secs(10),
+                    ) {
+                        Ok(stream) => {
+                            return Ok(self
+                                .host
+                                .net
+                                .add(Socket::Stream(std::io::BufReader::new(stream))))
+                        }
+                        Err(e) => last = net_err(&format!("tcp_connect to {addr}"), e),
+                    }
+                }
+                Err(last)
+            }
+            Builtin::TcpListen => {
+                let (host, port) = (s(0)?, port_arg("tcp_listen", int(1)?)?);
+                let listener = std::net::TcpListener::bind((&*host, port))
+                    .map_err(|e| net_err("tcp_listen", e))?;
+                Ok(self.host.net.add(Socket::Listener(listener)))
+            }
+            Builtin::TcpAccept => {
+                let h = int(0)?;
+                let Socket::Listener(listener) = self.host.net.get("tcp_accept", h)? else {
+                    return Err(format!("tcp_accept: handle {h} is not a TCP listener"));
+                };
+                let (stream, _) = listener.accept().map_err(|e| net_err("tcp_accept", e))?;
+                Ok(self
+                    .host
+                    .net
+                    .add(Socket::Stream(std::io::BufReader::new(stream))))
+            }
+            Builtin::TcpSend => {
+                let (h, text) = (int(0)?, s(1)?);
+                let stream = self.host.net.stream("tcp_send", h)?.get_mut();
+                stream
+                    .write_all(text.as_bytes())
+                    .and_then(|_| stream.flush())
+                    .map_err(|e| net_err("tcp_send", e))?;
+                Ok(Value::Unit)
+            }
+            Builtin::TcpRecv => {
+                let (h, max) = (int(0)?, int(1)?);
+                if !(1..=MAX_READ).contains(&max) {
+                    return Err(format!("tcp_recv: max_bytes must be 1-{MAX_READ}"));
+                }
+                let reader = self.host.net.stream("tcp_recv", h)?;
+                let data = reader.fill_buf().map_err(|e| net_err("tcp_recv", e))?;
+                let n = data.len().min(max as usize);
+                let text = String::from_utf8_lossy(&data[..n]).into_owned();
+                reader.consume(n);
+                self.str_value(text)
+            }
+            Builtin::TcpRecvLine => {
+                let h = int(0)?;
+                let reader = self.host.net.stream("tcp_recv_line", h)?;
+                let mut line = Vec::new();
+                let n = std::io::Read::take(reader, MAX_READ as u64)
+                    .read_until(b'\n', &mut line)
+                    .map_err(|e| net_err("tcp_recv_line", e))?;
+                if n == 0 {
+                    return Err("tcp_recv_line: the connection is closed".into());
+                }
+                let text = String::from_utf8_lossy(&line);
+                self.str_value(text.trim_end_matches(['\n', '\r']).to_string())
+            }
+            Builtin::NetClose => {
+                let h = int(0)?;
+                self.host.net.get("net_close", h)?;
+                self.host.net.sockets[h as usize] = None;
+                Ok(Value::Unit)
+            }
+            Builtin::UdpBind => {
+                let (host, port) = (s(0)?, port_arg("udp_bind", int(1)?)?);
+                let socket = std::net::UdpSocket::bind((&*host, port))
+                    .map_err(|e| net_err("udp_bind", e))?;
+                Ok(self.host.net.add(Socket::Udp(socket)))
+            }
+            Builtin::UdpSend => {
+                let (h, host, port, text) = (int(0)?, s(1)?, int(2)?, s(3)?);
+                let port = port_arg("udp_send", port)?;
+                let socket = self.host.net.udp("udp_send", h)?;
+                socket
+                    .send_to(text.as_bytes(), (&*host, port))
+                    .map_err(|e| net_err("udp_send", e))?;
+                Ok(Value::Unit)
+            }
+            Builtin::UdpRecv => {
+                let (h, max) = (int(0)?, int(1)?);
+                if !(1..=65_535).contains(&max) {
+                    return Err("udp_recv: max_bytes must be 1-65535".into());
+                }
+                let socket = self.host.net.udp("udp_recv", h)?;
+                let mut buf = vec![0u8; max as usize];
+                let (n, from) = socket
+                    .recv_from(&mut buf)
+                    .map_err(|e| net_err("udp_recv", e))?;
+                let mut map = BTreeMap::new();
+                let mut put = |k: &str, v: String| {
+                    map.insert(Key::Str(Rc::from(k)), Value::Str(Rc::from(v)));
+                };
+                put("data", String::from_utf8_lossy(&buf[..n]).into_owned());
+                put("host", from.ip().to_string());
+                put("port", from.port().to_string());
+                Ok(Value::Map(Rc::new(map)))
+            }
+            Builtin::LocalPort => {
+                let h = int(0)?;
+                let addr = match self.host.net.get("local_port", h)? {
+                    Socket::Listener(l) => l.local_addr(),
+                    Socket::Stream(s) => s.get_ref().local_addr(),
+                    Socket::Udp(u) => u.local_addr(),
+                }
+                .map_err(|e| net_err("local_port", e))?;
+                Ok(Value::Int(addr.port() as i64))
+            }
+            Builtin::NetTimeout => {
+                let (h, ms) = (int(0)?, int(1)?);
+                if ms < 0 {
+                    return Err("net_timeout: milliseconds cannot be negative".into());
+                }
+                let timeout = (ms > 0).then(|| std::time::Duration::from_millis(ms as u64));
+                match self.host.net.get("net_timeout", h)? {
+                    Socket::Stream(s) => s.get_ref().set_read_timeout(timeout),
+                    Socket::Udp(u) => u.set_read_timeout(timeout),
+                    Socket::Listener(_) => {
+                        return Err("net_timeout: not supported for listeners".into())
+                    }
+                }
+                .map_err(|e| net_err("net_timeout", e))?;
+                Ok(Value::Unit)
+            }
+            Builtin::Resolve => {
+                use std::net::ToSocketAddrs;
+                let host = s(0)?;
+                let mut ips: Vec<String> = Vec::new();
+                for addr in (&*host, 0)
+                    .to_socket_addrs()
+                    .map_err(|e| net_err("resolve", e))?
+                {
+                    let ip = addr.ip().to_string();
+                    if !ips.contains(&ip) {
+                        ips.push(ip);
+                    }
+                }
+                Ok(Value::Array(Rc::new(
+                    ips.into_iter().map(|ip| Value::Str(Rc::from(ip))).collect(),
+                )))
+            }
             Builtin::HttpGet => {
                 let body = curl("http_get", &s(0)?, None)?;
                 self.str_value(body)

@@ -9,6 +9,10 @@ Not tagged or released yet.
 
 ### Added
 
+- Stage 4 (networking): TCP `tcp_listen` / `tcp_accept` / `tcp_connect` /
+  `tcp_send` / `tcp_recv` / `tcp_recv_line`; UDP `udp_bind` / `udp_send` /
+  `udp_recv`; `net_close`, `net_timeout`, `local_port`, `resolve`.
+  `examples/web/port_check.nex`.
 - Stage 3: `Json` type with `json_parse`, `to_json`, `json` and methods
   (`get`, `at`, `has`, `keys`, `items`, `str`, `int`, `float`, `bool`,
   `is_null`, `kind`); HTTP client `http_get` / `http_post` (via `curl`);
@@ -48,8 +52,8 @@ Not tagged or released yet.
 ### Known limitations
 
 - No structs/enums, closures or generics.
-- No raw TCP/UDP sockets or hashing yet. The HTTP server handles one
-  request at a time and listens on 127.0.0.1 only.
+- No hashing/crypto yet. Networking is blocking and single-threaded; the
+  HTTP server handles one request at a time and listens on 127.0.0.1 only.
 - `nex test`, `nex fmt` and `nex repl` are not implemented (exit code 2).
 - The parser stops at the first syntax error.
 - Instruction count is unlimited unless `--max-steps` is given.
