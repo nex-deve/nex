@@ -1,12 +1,11 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="NexDeve" width="120">
-</p>
-
-<h1 align="center">NEX</h1>
-
-<p align="center">
-  <b>A fast, safe and simple programming language by <a href="https://nexdeve.com">NexDeve</a>.</b><br>
-  Statically typed · compiled to verified bytecode · written in Rust
+  <a href="https://nexdeve.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg">
+      <img src="docs/assets/banner-light.svg" alt="NEX: a fast, safe and simple programming language by NexDeve" width="100%">
+    </picture>
+  </a>
 </p>
 
 <p align="center">
@@ -59,6 +58,18 @@ Hello, NexDeve!
 > **Status: alpha.** NEX is young and not production-ready yet. Everything
 > listed under [Features](#features) works and is tested; file I/O,
 > modules, networking and more are on the [roadmap](ROADMAP.md).
+
+## How NEX runs your code
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pipeline-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/pipeline-light.svg">
+  <img src="docs/assets/pipeline-light.svg" alt="Source → Lexer → Parser → Checker → Compiler → Verifier → VM" width="100%">
+</picture>
+
+Your `.nex` file is checked completely before anything runs. If there is a
+mistake, you get a clear message pointing at the exact line and column, and
+the program never starts. See [Architecture](docs/ARCHITECTURE.md) for details.
 
 ## Quick start
 
@@ -178,16 +189,25 @@ Useful options: `--app NAME` runs one app; `--max-steps N` and
 
 </details>
 
-## Roadmap
+## Vision: from A to Z
 
-| Stage | What it adds | Status |
+The goal is one language for everything from small scripts to servers,
+networks and hardware. NEX is being built toward that one tested stage at
+a time. This table shows honestly where each goal stands today.
+
+| Goal | What you will build | Status |
 |---|---|---|
-| 1 | Core language, functions, arrays, maps, floats, `for` | ✅ done |
-| 2 | File I/O, user input, modules (`use`), error handling | ⏳ next |
-| 3 | HTTP and JSON (websites, APIs, bots) | planned |
-| 4 | Hashing and networking (blockchain experiments, network tools) | planned |
-| 5 | Hardware access (serial / GPIO) | planned |
+| **Learning and logic** | Calculators, data processing, algorithms, games logic | ✅ available now |
+| **Automation** | Scripts that read and write files, take input, process reports | ⏳ stage 2 (next) |
+| **Bigger programs** | Projects split into modules with `use`, proper error handling | ⏳ stage 2 (next) |
+| **Websites and APIs** | HTTP servers and clients, JSON, bots | 🗓️ stage 3 |
+| **Networking** | TCP / UDP tools and services | 🗓️ stage 4 |
+| **Blockchain** | Hashing (SHA-256), signatures, ledgers and experiments | 🗓️ stage 4 |
+| **Apps** | Desktop and web front ends | 🗓️ later |
+| **Robotics and hardware** | Serial ports, GPIO, sensors and motors | 🗓️ stage 5 |
+| **Packages** | Share and install NEX libraries | 🗓️ later |
 
+✅ works and is tested · ⏳ in progress · 🗓️ planned.
 Full details in [ROADMAP.md](ROADMAP.md).
 
 ## Documentation
@@ -216,4 +236,9 @@ Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
 any contribution you submit for inclusion in NEX is dual-licensed the same
 way, without any additional terms.
 
-<p align="center">Made by <a href="https://nexdeve.com">NexDeve</a></p>
+---
+
+<p align="center">
+  <a href="https://nexdeve.com"><img src="docs/assets/logo.png" alt="NexDeve" width="56"></a><br>
+  <sub>Made by <a href="https://nexdeve.com">NexDeve</a></sub>
+</p>

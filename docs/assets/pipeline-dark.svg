@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="190" viewBox="0 0 1280 190" role="img" aria-labelledby="title">
+  <title id="title">How NEX runs a program: source, lexer, parser, checker, compiler, verifier, VM</title>
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C5CFF" />
+      <stop offset="1" stop-color="#00C2FF" />
+    </linearGradient>
+  </defs>
+  
+  <g>
+    <rect x="40" y="50" width="148" height="92" rx="14" fill="#111A33" stroke="url(#accent)" stroke-width="2" />
+    <text x="114" y="90" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F5FF">Source</text>
+    <text x="114" y="114" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8F9CC6">.nex file</text>
+  </g>
+  <path d="M194.0 96 H203.3" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" />
+  <path d="M199.3 91 L209.3 96 L199.3 101" fill="none" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <g>
+    <rect x="215.33333333333334" y="50" width="148" height="92" rx="14" fill="#111A33" stroke="#2B3A6B" stroke-width="1.2" />
+    <text x="289.33333333333337" y="90" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F5FF">Lexer</text>
+    <text x="289.33333333333337" y="114" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8F9CC6">tokens</text>
+  </g>
+  <path d="M369.3 96 H378.7" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" />
+  <path d="M374.7 91 L384.7 96 L374.7 101" fill="none" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <g>
+    <rect x="390.6666666666667" y="50" width="148" height="92" rx="14" fill="#111A33" stroke="#2B3A6B" stroke-width="1.2" />
+    <text x="464.6666666666667" y="90" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F5FF">Parser</text>
+    <text x="464.6666666666667" y="114" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8F9CC6">syntax tree</text>
+  </g>
+  <path d="M544.7 96 H554.0" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" />
+  <path d="M550.0 91 L560.0 96 L550.0 101" fill="none" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <g>
+    <rect x="566" y="50" width="148" height="92" rx="14" fill="#111A33" stroke="#2B3A6B" stroke-width="1.2" />
+    <text x="640" y="90" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F5FF">Checker</text>
+    <text x="640" y="114" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8F9CC6">names &amp; types</text>
+  </g>
+  <path d="M720.0 96 H729.3" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" />
+  <path d="M725.3 91 L735.3 96 L725.3 101" fill="none" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <g>
+    <rect x="741.3333333333334" y="50" width="148" height="92" rx="14" fill="#111A33" stroke="#2B3A6B" stroke-width="1.2" />
+    <text x="815.3333333333334" y="90" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F5FF">Compiler</text>
+    <text x="815.3333333333334" y="114" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8F9CC6">bytecode</text>
+  </g>
+  <path d="M895.3 96 H904.7" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" />
+  <path d="M900.7 91 L910.7 96 L900.7 101" fill="none" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <g>
+    <rect x="916.6666666666667" y="50" width="148" height="92" rx="14" fill="#111A33" stroke="#2B3A6B" stroke-width="1.2" />
+    <text x="990.6666666666667" y="90" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F5FF">Verifier</text>
+    <text x="990.6666666666667" y="114" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8F9CC6">safety checks</text>
+  </g>
+  <path d="M1070.7 96 H1080.0" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" />
+  <path d="M1076.0 91 L1086.0 96 L1076.0 101" fill="none" stroke="#5B6BA3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <g>
+    <rect x="1092" y="50" width="148" height="92" rx="14" fill="#111A33" stroke="url(#accent)" stroke-width="2" />
+    <text x="1166" y="90" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F5FF">VM</text>
+    <text x="1166" y="114" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" fill="#8F9CC6">runs your app</text>
+  </g>
+  <text x="640" y="176" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" fill="#8F9CC6">Nothing runs until every stage passes. Errors point to the exact line and column.</text>
+</svg>

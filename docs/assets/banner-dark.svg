@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
+  <title id="title">NEX programming language</title>
+  <desc id="desc">NEX: a fast, safe and simple programming language by NexDeve. Statically typed, compiled to verified bytecode, written in Rust.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#070B18" />
+      <stop offset="1" stop-color="#101934" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C5CFF" />
+      <stop offset="1" stop-color="#00C2FF" />
+    </linearGradient>
+    <linearGradient id="markFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C5CFF" />
+      <stop offset="1" stop-color="#00B8F0" />
+    </linearGradient>
+    <linearGradient id="titleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" />
+      <stop offset="1" stop-color="#B9C6FF" />
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7C5CFF" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#7C5CFF" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#00C2FF" stop-opacity="0.35" />
+      <stop offset="1" stop-color="#00C2FF" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#FFFFFF" stroke-opacity="0.045" stroke-width="1" />
+    </pattern>
+    <clipPath id="frame"><rect width="1280" height="420" rx="24" /></clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="420" fill="url(#bg)" />
+    <rect width="1280" height="420" fill="url(#grid)" />
+    <circle cx="1040" cy="60" r="330" fill="url(#glowA)" />
+    <circle cx="820" cy="430" r="300" fill="url(#glowB)" />
+    <circle cx="120" cy="40" r="220" fill="url(#glowA)" opacity="0.5" />
+
+    
+  <polygon points="132.0,86.1 176.7,111.0 176.7,161.0 132.0,185.9 87.3,161.0 87.3,111.0" fill="url(#markFill)" />
+  <polygon points="132.0,86.1 176.7,111.0 176.7,161.0 132.0,185.9 87.3,161.0 87.3,111.0" fill="none" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="1.56" />
+  <path d="M113.3,156.8 L113.3,115.2 L150.7,156.8 L150.7,115.2" fill="none" stroke="#FFFFFF" stroke-width="9.36" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="206" y="172" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="112" font-weight="800" letter-spacing="6" fill="url(#titleGrad)">NEX</text>
+    <text x="80" y="242" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="27" font-weight="600" fill="#FFFFFF">A fast, safe and simple programming language</text>
+    <text x="80" y="274" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" fill="#A9B4D6">by NexDeve · nexdeve.com</text>
+    
+  <g>
+    <rect x="80" y="300" width="172" height="34" rx="17" fill="#151F3D" stroke="#2A3866" />
+    <circle cx="97" cy="317" r="4" fill="url(#accent)" />
+    <text x="108" y="322.5" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#D6DEFF">Statically typed</text>
+  </g>
+  <g>
+    <rect x="264" y="300" width="180" height="34" rx="17" fill="#151F3D" stroke="#2A3866" />
+    <circle cx="281" cy="317" r="4" fill="url(#accent)" />
+    <text x="292" y="322.5" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#D6DEFF">Verified bytecode</text>
+  </g>
+  <g>
+    <rect x="456" y="300" width="163" height="34" rx="17" fill="#151F3D" stroke="#2A3866" />
+    <circle cx="473" cy="317" r="4" fill="url(#accent)" />
+    <text x="484" y="322.5" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#D6DEFF">Written in Rust</text>
+  </g>
+
+    <g>
+      <rect x="766" y="102" width="440" height="252" rx="16" fill="#000000" opacity="0.18" />
+      <rect x="760" y="92" width="440" height="252" rx="16" fill="#0B1226" stroke="#26325C" />
+      <path d="M760 108 a16 16 0 0 1 16 -16 h408 a16 16 0 0 1 16 16 v26 h-440 z" fill="#111A35" />
+      <circle cx="784" cy="113" r="6" fill="#FF5F57" />
+      <circle cx="804" cy="113" r="6" fill="#FEBC2E" />
+      <circle cx="824" cy="113" r="6" fill="#28C840" />
+      <text x="980" y="118" text-anchor="middle" font-family="'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace" font-size="13" fill="#7F8BB5">hello.nex</text>
+    <text x="786" y="176" font-family="'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace" font-size="16" xml:space="preserve"><tspan fill="#5F6B96">// hello.nex</tspan></text>
+    <text x="786" y="202" font-family="'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace" font-size="16" xml:space="preserve"><tspan fill="#FF7AB2">app</tspan><tspan fill="#E8ECFF"> </tspan><tspan fill="#7EE0FF">Hello</tspan><tspan fill="#C9D2F2"> {</tspan></text>
+    <text x="786" y="228" font-family="'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace" font-size="16" xml:space="preserve"><tspan fill="#E8ECFF">    </tspan><tspan fill="#FF7AB2">let</tspan><tspan fill="#E8ECFF"> langs </tspan><tspan fill="#C9D2F2">= [</tspan><tspan fill="#A8E07A">"NEX"</tspan><tspan fill="#C9D2F2">, </tspan><tspan fill="#A8E07A">"Rust"</tspan><tspan fill="#C9D2F2">]</tspan></text>
+    <text x="786" y="254" font-family="'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace" font-size="16" xml:space="preserve"><tspan fill="#E8ECFF">    </tspan><tspan fill="#FF7AB2">for</tspan><tspan fill="#E8ECFF"> lang </tspan><tspan fill="#FF7AB2">in</tspan><tspan fill="#E8ECFF"> langs.</tspan><tspan fill="#7EE0FF">sorted</tspan><tspan fill="#C9D2F2">() {</tspan></text>
+    <text x="786" y="280" font-family="'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace" font-size="16" xml:space="preserve"><tspan fill="#E8ECFF">        </tspan><tspan fill="#FF7AB2">say</tspan><tspan fill="#E8ECFF"> </tspan><tspan fill="#A8E07A">"Hello, </tspan><tspan fill="#FFC66D">{lang}</tspan><tspan fill="#A8E07A">!"</tspan></text>
+    <text x="786" y="306" font-family="'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace" font-size="16" xml:space="preserve"><tspan fill="#C9D2F2">    }</tspan></text>
+    <text x="786" y="332" font-family="'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace" font-size="16" xml:space="preserve"><tspan fill="#C9D2F2">}</tspan></text>
+    </g>
+  </g>
+</svg>
