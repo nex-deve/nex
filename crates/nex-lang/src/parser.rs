@@ -8,19 +8,40 @@ use crate::span::Span;
 type PResult<T> = Result<T, Diagnostic>;
 
 pub fn parse(src: &str) -> PResult<Program> {
-    let tokens = lex(src, 0)?;
+    parse_file(src, 0, 0).map(|(program, _)| program)
+}
+
+/// Parse file number `file`. Expression ids start at `first_id` so that
+/// ids stay unique across all files of a project; returns the next free id.
+pub fn parse_file(src: &str, file: u32, first_id: ExprId) -> PResult<(Program, ExprId)> {
     let mut parser = Parser {
-        tokens,
+        tokens: lex_in(src, 0, file)?,
         pos: 0,
-        next_id: 0,
+        next_id: first_id,
+        file,
     };
-    parser.program()
+    let program = parser.program().map_err(|d| in_file(d, file))?;
+    Ok((program, parser.next_id))
+}
+
+fn in_file(mut d: Diagnostic, file: u32) -> Diagnostic {
+    d.span.file = file;
+    d
+}
+
+fn lex_in(src: &str, base: usize, file: u32) -> PResult<Vec<Token>> {
+    let mut tokens = lex(src, base).map_err(|d| in_file(d, file))?;
+    for t in &mut tokens {
+        t.span.file = file;
+    }
+    Ok(tokens)
 }
 
 struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     next_id: ExprId,
+    file: u32,
 }
 
 fn binop(tok: &Tok) -> Option<(BinOp, u8)> {
@@ -178,7 +199,10 @@ impl Parser {
                 | Tok::While
                 | Tok::Return
                 | Tok::Break
-                | Tok::Continue => {
+                | Tok::Continue
+                | Tok::For
+                | Tok::Try
+                | Tok::Fail => {
                     return Err(Diagnostic::error(
                         "statements are not allowed at the top level",
                         self.span(),
@@ -354,6 +378,26 @@ impl Parser {
                 };
                 let body = self.block()?;
                 StmtKind::For { var, iter, body }
+            }
+            Tok::Try => {
+                self.advance();
+                let body = self.block()?;
+                let mut look = self.pos;
+                while self.tokens[look].tok == Tok::Newline {
+                    look += 1;
+                }
+                if self.tokens[look].tok != Tok::Catch {
+                    return Err(self.unexpected("`catch` after the `try` block"));
+                }
+                self.pos = look;
+                self.advance();
+                let err = self.ident("a name for the error, like `catch err`")?;
+                let handler = self.block()?;
+                StmtKind::Try { body, err, handler }
+            }
+            Tok::Fail => {
+                self.advance();
+                StmtKind::Fail(self.expr()?)
             }
             Tok::Break => {
                 self.advance();
@@ -609,9 +653,10 @@ impl Parser {
                 StrPart::Lit(text) => out.push(InterpPart::Lit(text)),
                 StrPart::Expr { src, offset } => {
                     let mut sub = Parser {
-                        tokens: lex(&src, offset)?,
+                        tokens: lex_in(&src, offset, self.file)?,
                         pos: 0,
                         next_id: self.next_id,
+                        file: self.file,
                     };
                     let expr = sub.expr()?;
                     if !sub.check(&Tok::Eof) {
@@ -714,6 +759,43 @@ mod tests {
     }
 
     #[test]
+    fn try_catch_and_fail() {
+        let stmts =
+            first_app_stmts("app A {\n try {\n fail \"x\"\n }\n catch err {\n say err\n }\n}");
+        match &stmts[0].kind {
+            StmtKind::Try { body, err, handler } => {
+                assert!(matches!(body.stmts[0].kind, StmtKind::Fail(_)));
+                assert_eq!(err.name, "err");
+                assert_eq!(handler.stmts.len(), 1);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(parse("app A { try { } }")
+            .unwrap_err()
+            .message
+            .contains("`catch` after the `try` block"));
+        assert!(parse("app A { try { } catch { } }")
+            .unwrap_err()
+            .message
+            .contains("a name for the error"));
+    }
+
+    #[test]
+    fn spans_carry_the_file_number() {
+        let (p, next) = parse_file("app A { say 1 }", 3, 100).unwrap();
+        let Item::App(a) = &p.items[0] else { panic!() };
+        assert_eq!(a.name.span.file, 3);
+        let StmtKind::Say(e) = &a.body.stmts[0].kind else {
+            panic!()
+        };
+        assert_eq!(e.id, 100);
+        assert_eq!(e.span.file, 3);
+        assert_eq!(next, 101);
+        let err = parse_file("app A { say @ }", 2, 0).unwrap_err();
+        assert_eq!(err.span.file, 2);
+    }
+
+    #[test]
     fn assignment_targets_and_for() {
         let stmts =
             first_app_stmts("app A {\n grid[1][2] = 5\n for i in 0..n { }\n for x in items { }\n}");
@@ -790,6 +872,8 @@ mod tests {
                 StmtKind::If { .. } => "if",
                 StmtKind::While { .. } => "while",
                 StmtKind::For { .. } => "for",
+                StmtKind::Try { .. } => "try",
+                StmtKind::Fail(_) => "fail",
                 StmtKind::Break => "break",
                 StmtKind::Continue => "continue",
                 StmtKind::Block(_) => "block",

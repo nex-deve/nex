@@ -42,15 +42,14 @@ below it first, and none is claimed until it has tests.
 | Robotics / hardware | C + serial port / GPIO bindings, timing |
 | Speed for large programs | profiling, a faster VM or native compilation |
 
-## Milestone C — modules and I/O: **planned**
+## Milestone C — modules and I/O: **partial**
 
-- [ ] Module system: `use`, file-based module resolution, cycle detection
-      (`use` currently parses and reports "unresolved module")
-- [ ] File I/O, environment variables, stderr, exit codes from programs
+- [x] Module system: `use`, file-based module resolution, circular imports allowed
+- [x] File I/O, user input, args, environment variables, stderr, exit codes
 - [ ] JSON
 - [ ] HTTP client (`net.http`)
-- [ ] Error values and propagation (a `Result`-style type)
-- [ ] A documented capability model for I/O (see SECURITY.md)
+- [x] Error handling: `fail`, `try` / `catch` across calls
+- [x] `--sandbox` mode that disables file and environment access
 
 ## Milestone D — tooling: **partial**
 

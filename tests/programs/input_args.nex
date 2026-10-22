@@ -1,0 +1,11 @@
+app Ask {
+    let name = input("Your name: ")
+    let age = parse_int(input("Your age: "))
+    say "Hello {name}, next year you will be {age + 1}."
+    say "args: {args()}"
+    try {
+        say input("more? ")
+    } catch e {
+        say "no more input: {e}"
+    }
+}

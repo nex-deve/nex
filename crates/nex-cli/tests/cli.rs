@@ -277,3 +277,150 @@ fn file_without_apps() {
     assert_eq!(o.status.code(), Some(1));
     assert!(stderr(&o).contains("no `app` block"));
 }
+
+#[test]
+fn file_io_automation() {
+    let dir = scratch("file_io");
+    let script = write(
+        &dir,
+        "report.nex",
+        r#"app Report {
+    write_file("data.txt", "apple 3\nmango 12\n")
+    append_file("data.txt", "apple 2\n")
+    var totals: {Str: Int} = {}
+    for line in read_file("data.txt").trim().split("\n") {
+        let parts = line.split(" ")
+        totals[parts[0]] = totals.get(parts[0], 0) + parse_int(parts[1])
+    }
+    var report = ""
+    for name in totals {
+        report = report + "{name}: {totals[name]}\n"
+    }
+    write_file("report.txt", report)
+    say "exists: {file_exists("report.txt")}"
+    say list_dir(".")
+    delete_file("data.txt")
+    say "after delete: {file_exists("data.txt")}"
+    try {
+        say read_file("missing.txt")
+    } catch e {
+        say "caught: {e.starts_with("read_file: cannot read")}"
+    }
+}
+"#,
+    );
+    let o = nex()
+        .arg("run")
+        .arg(&script)
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
+    assert_eq!(
+        stdout(&o),
+        "exists: true\n[\"data.txt\", \"report.nex\", \"report.txt\"]\nafter delete: false\ncaught: true\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("report.txt")).unwrap(),
+        "apple: 5\nmango: 12\n"
+    );
+}
+
+#[test]
+fn sandbox_blocks_files_and_env() {
+    let dir = scratch("sandbox");
+    let script = write(
+        &dir,
+        "s.nex",
+        "app S {\n    say \"start\"\n    write_file(\"x.txt\", \"no\")\n}\n",
+    );
+    let o = nex()
+        .args(["run", "--sandbox"])
+        .arg(&script)
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(3));
+    assert_eq!(stdout(&o), "start\n");
+    assert!(
+        stderr(&o).contains("disabled (--sandbox)"),
+        "{}",
+        stderr(&o)
+    );
+    assert!(!dir.join("x.txt").exists());
+}
+
+#[test]
+fn exit_codes_args_and_stderr() {
+    let dir = scratch("exit_args");
+    let script = write(
+        &dir,
+        "e.nex",
+        "app E {\n    let a = args()\n    say \"got {a.len()}: {a.join(\"|\")}\"\n    eprint(\"warning!\")\n    if a.contains(\"--fail\") {\n        exit(7)\n    }\n    say \"normal end\"\n}\n",
+    );
+    let o = run(&["run", script.to_str().unwrap(), "--", "one", "--fail"]);
+    assert_eq!(o.status.code(), Some(7), "{}", stderr(&o));
+    assert_eq!(stdout(&o), "got 2: one|--fail\n");
+    assert_eq!(stderr(&o), "warning!\n");
+
+    let o = run(&["run", script.to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(stdout(&o), "got 0: \nnormal end\n");
+}
+
+#[test]
+fn input_from_stdin() {
+    use std::io::Write as _;
+    let dir = scratch("stdin");
+    let script = write(
+        &dir,
+        "ask.nex",
+        "app Ask {\n    let n = parse_int(input(\"number? \"))\n    say \"double: {n * 2}\"\n}\n",
+    );
+    let mut child = nex()
+        .arg("run")
+        .arg(&script)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"21\n").unwrap();
+    let o = child.wait_with_output().unwrap();
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(stdout(&o), "number? double: 42\n");
+}
+
+#[test]
+fn modules_from_the_cli() {
+    let project = repo_root().join("tests/projects/modules");
+    let o = run(&["run", project.join("main.nex").to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
+    assert!(stdout(&o).starts_with("49\n25\nHELLO!\n"));
+
+    // a built file contains the modules and runs without them
+    let dir = scratch("modules_build");
+    let out = dir.join("app.nexdeve");
+    let o = run(&[
+        "build",
+        project.join("main.nex").to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
+    let o = run(&["run", out.to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
+    assert!(stdout(&o).contains("==== NEX ===="));
+
+    // errors inside a module are shown against the module file
+    let o = run(&[
+        "check",
+        repo_root()
+            .join("tests/projects/module_type_errors/main.nex")
+            .to_str()
+            .unwrap(),
+    ]);
+    assert_eq!(o.status.code(), Some(1));
+    let err = stderr(&o);
+    assert!(err.contains("--> helpers.nex:2:18"), "{err}");
+    assert!(err.contains("2 |     return n * 2 + \"a\""), "{err}");
+}

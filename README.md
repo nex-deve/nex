@@ -56,8 +56,8 @@ Hello, NexDeve!
 | **Portable** | Tested on Linux, Windows and macOS on every change. No dependencies beyond Rust. |
 
 > **Status: alpha.** NEX is young and not production-ready yet. Everything
-> listed under [Features](#features) works and is tested; file I/O,
-> modules, networking and more are on the [roadmap](ROADMAP.md).
+> listed under [Features](#features) works and is tested; HTTP, JSON,
+> networking and more are on the [roadmap](ROADMAP.md).
 
 ## How NEX runs your code
 
@@ -161,6 +161,10 @@ test suite, so they always work.
   `trim`, `replace`, `upper`, and [more](SPEC.md#9-methods)
 - **Built-ins:** `sqrt`, `floor`, `round`, `parse_int`, `parse_float`,
   `to_int`, `to_float`
+- **Error handling:** `fail` an error, `try` / `catch` it, even across function calls
+- **Modules:** split code into files with `use lib.math` and call `math.square(4)`
+- **Files and system:** `read_file`, `write_file`, `append_file`, `list_dir`, `input`,
+  `args`, `env`, `exit`, `eprint`, `time_ms` (`--sandbox` turns file access off)
 - **Tooling:** `nex run`, `check`, `build`, `disasm`, `new`
 
 ## Command line
@@ -198,9 +202,9 @@ a time. This table shows honestly where each goal stands today.
 | Goal | What you will build | Status |
 |---|---|---|
 | **Learning and logic** | Calculators, data processing, algorithms, games logic | ✅ available now |
-| **Automation** | Scripts that read and write files, take input, process reports | ⏳ stage 2 (next) |
-| **Bigger programs** | Projects split into modules with `use`, proper error handling | ⏳ stage 2 (next) |
-| **Websites and APIs** | HTTP servers and clients, JSON, bots | 🗓️ stage 3 |
+| **Automation** | Scripts that read and write files, take input, process reports | ✅ available now |
+| **Bigger programs** | Projects split into modules with `use`, proper error handling | ✅ available now |
+| **Websites and APIs** | HTTP servers and clients, JSON, bots | ⏳ stage 3 (next) |
 | **Networking** | TCP / UDP tools and services | 🗓️ stage 4 |
 | **Blockchain** | Hashing (SHA-256), signatures, ledgers and experiments | 🗓️ stage 4 |
 | **Apps** | Desktop and web front ends | 🗓️ later |

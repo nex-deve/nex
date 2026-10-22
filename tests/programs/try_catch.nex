@@ -1,0 +1,86 @@
+fn safe_div(a: Int, b: Int) -> Int {
+    if b == 0 {
+        fail "cannot divide {a} by zero"
+    }
+    return a / b
+}
+
+fn parse_age(text: Str) -> Int {
+    let n = parse_int(text)
+    if n < 0 {
+        fail "age cannot be negative"
+    }
+    return n
+}
+
+fn level3() -> Int {
+    let xs = [1, 2]
+    return xs[5]
+}
+
+fn level2() -> Int {
+    return level3() + 1
+}
+
+app TryCatch {
+    try {
+        say safe_div(10, 2)
+        say safe_div(1, 0)
+        say "not printed"
+    } catch err {
+        say "caught: {err}"
+    }
+
+    for text in ["42", "-3", "abc"] {
+        try {
+            say "age {parse_age(text)}"
+        } catch e {
+            say "bad {text}: {e}"
+        }
+    }
+
+    // errors from deep inside calls are caught too
+    try {
+        say level2()
+    } catch e {
+        say "deep: {e}"
+    }
+
+    // nested try: the inner handler runs first, then rethrows
+    try {
+        try {
+            fail "inner"
+        } catch e {
+            say "inner caught {e}"
+            fail "outer from {e}"
+        }
+    } catch e {
+        say "outer caught {e}"
+    }
+
+    // break and continue out of a try block
+    var n = 0
+    while true {
+        n = n + 1
+        try {
+            if n == 2 {
+                continue
+            }
+            if n == 4 {
+                break
+            }
+            say "n={n}"
+        } catch e {
+            say "never"
+        }
+    }
+    say "loop done at {n}"
+
+    // after leaving the try block, its handler no longer applies
+    try {
+        say "inside"
+    } catch e {
+        say "never"
+    }
+    say "end"
+}

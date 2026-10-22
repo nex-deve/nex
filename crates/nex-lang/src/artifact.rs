@@ -6,11 +6,11 @@
 //! magic            4 bytes  "NEXB"
 //! format_version   u16      FORMAT_VERSION
 //! compiler         str      version of the nex compiler that wrote it
-//! source_name      str
+//! source_count     u32      then per source file: name str
 //! const_count      u32      then per constant: tag u8
 //!                           (0 = Int i64, 1 = Str str, 2 = Float f64 bits)
 //! function_count   u32      then per function:
-//!     name str, kind u8 (0 = fn, 1 = app), arity u32, num_locals u32,
+//!     name str, kind u8 (0 = fn, 1 = app), source u32, arity u32, num_locals u32,
 //!     code_len u32, then per instruction: opcode u8, then 0-2 operands
 //!     u32 (count fixed per opcode, see `Op::operand_count`),
 //!     then per instruction: line u32, col u32
@@ -24,15 +24,19 @@
 use crate::bytecode::{Const, FnKind, Function, Module, Op, Pos};
 
 pub const MAGIC: &[u8; 4] = b"NEXB";
-/// Version 2 added floats, collections, methods and built-ins.
-pub const FORMAT_VERSION: u16 = 2;
+/// Version 2 added floats, collections, methods and built-ins; version 3
+/// added multiple source files, error handling and I/O built-ins.
+pub const FORMAT_VERSION: u16 = 3;
 
 pub fn encode(m: &Module) -> Vec<u8> {
     let mut w = Vec::new();
     w.extend_from_slice(MAGIC);
     w.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
     put_str(&mut w, crate::VERSION);
-    put_str(&mut w, &m.source_name);
+    put_u32(&mut w, m.sources.len() as u32);
+    for s in &m.sources {
+        put_str(&mut w, s);
+    }
     put_u32(&mut w, m.consts.len() as u32);
     for c in &m.consts {
         match c {
@@ -57,6 +61,7 @@ pub fn encode(m: &Module) -> Vec<u8> {
             FnKind::Fn => 0,
             FnKind::App => 1,
         });
+        put_u32(&mut w, f.source);
         put_u32(&mut w, f.arity);
         put_u32(&mut w, f.num_locals);
         put_u32(&mut w, f.code.len() as u32);
@@ -101,7 +106,11 @@ pub fn decode(bytes: &[u8]) -> Result<Module, String> {
 
     let mut r = Reader { data: body, pos: 6 };
     let _compiler = r.str()?;
-    let source_name = r.str()?;
+    let n = r.count()?;
+    let mut sources = Vec::with_capacity(n);
+    for _ in 0..n {
+        sources.push(r.str()?);
+    }
     let n = r.count()?;
     let mut consts = Vec::with_capacity(n);
     for _ in 0..n {
@@ -121,6 +130,7 @@ pub fn decode(bytes: &[u8]) -> Result<Module, String> {
             1 => FnKind::App,
             k => return Err(format!("unknown function kind {k}")),
         };
+        let source = r.u32()?;
         let arity = r.u32()?;
         let num_locals = r.u32()?;
         let len = r.count()?;
@@ -148,6 +158,7 @@ pub fn decode(bytes: &[u8]) -> Result<Module, String> {
             num_locals,
             code,
             positions,
+            source,
         });
     }
     let n = r.count()?;
@@ -159,7 +170,7 @@ pub fn decode(bytes: &[u8]) -> Result<Module, String> {
         return Err("unexpected trailing data".into());
     }
     Ok(Module {
-        source_name,
+        sources,
         consts,
         functions,
         apps,

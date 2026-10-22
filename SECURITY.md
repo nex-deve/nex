@@ -12,10 +12,11 @@ NEX 0.1.0-alpha.1 is **not a sandbox** and has not been security-audited.
 
 What the current implementation provides:
 
-- **No ambient capabilities in the language.** The language has no file,
-  network, process or environment access. The only effect a program can
-  have is writing text to standard output. (This will change when the
-  standard library gains I/O; a capability model will be documented then.)
+- **File and environment access, with a sandbox switch.** Programs can
+  read, write and delete files and read environment variables, like any
+  scripting language. `nex run --sandbox` disables all of that; a sandboxed
+  program can only use standard input/output, `args`, `exit` and time.
+  There is still no network or process access.
 - **Bytecode verification.** Every module, including `.nexdeve` files from
   disk, is verified before running (see docs/ARCHITECTURE.md). Malformed
   bytecode is rejected or produces a runtime error; it must never cause

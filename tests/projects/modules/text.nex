@@ -1,0 +1,15 @@
+// Modules may use other modules.
+use lib.math
+
+fn shout(s: Str) -> Str {
+    return s.upper() + "!"
+}
+
+fn banner(s: Str) -> Str {
+    let line = "=".chars()
+    var bar = ""
+    for i in 0..math.square(2) {
+        bar = bar + line[0]
+    }
+    return "{bar} {s} {bar}"
+}

@@ -1,0 +1,3 @@
+compile
+mismatched types: expected `Str`, found `Int`
+mismatched types: expected `Int`, found `Str`

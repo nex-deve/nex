@@ -86,9 +86,9 @@ fn stack_effect(m: &Module, op: Op) -> (u32, u32) {
         Op::MakeMap(n) => (2 * n, 1),
         Op::Index => (2, 1),
         Op::StoreIndex(_, d) => (d + 1, 0),
-        Op::Jump(_) => (0, 0),
+        Op::Jump(_) | Op::TryBegin(_) | Op::TryEnd => (0, 0),
         Op::Call(i) => (m.functions[i as usize].arity, 1),
-        Op::Return => (1, 0),
+        Op::Return | Op::Fail => (1, 0),
         Op::Method(id) => (1 + Method::from_id(id).expect("checked").argc(), 1),
         Op::MethodMut(_, id) => (Method::from_id(id).expect("checked").argc(), 1),
         Op::Builtin(id) => (Builtin::from_id(id).expect("checked").argc(), 1),
@@ -120,6 +120,12 @@ fn verify_fn(m: &Module, f: &Function) -> Result<(), VerifyError> {
     if f.kind == FnKind::App && f.arity != 0 {
         return Err(err(None, "an app cannot take parameters".into()));
     }
+    if f.source as usize >= m.sources.len() {
+        return Err(err(
+            None,
+            format!("source index {} is out of range", f.source),
+        ));
+    }
 
     // Operand checks.
     for (pc, &op) in f.code.iter().enumerate() {
@@ -130,7 +136,7 @@ fn verify_fn(m: &Module, f: &Function) -> Result<(), VerifyError> {
             Op::Load(i) | Op::Store(i) if i >= f.num_locals => {
                 Some(format!("local slot {i} is out of range"))
             }
-            Op::Jump(t) | Op::JumpIfFalse(t) if t as usize >= n => {
+            Op::Jump(t) | Op::JumpIfFalse(t) | Op::TryBegin(t) if t as usize >= n => {
                 Some(format!("jump target {t} is out of range"))
             }
             Op::Call(i) => match m.functions.get(i as usize) {
@@ -198,7 +204,8 @@ fn verify_fn(m: &Module, f: &Function) -> Result<(), VerifyError> {
         if next_depth > MAX_STACK_DEPTH {
             return Err(err(Some(pc), "operand stack too deep".into()));
         }
-        let successors: &[usize] = match op {
+        // (successor, stack depth on entry to it)
+        let successors: Vec<(usize, u32)> = match op {
             Op::Return => {
                 if d != 1 {
                     return Err(err(
@@ -206,13 +213,17 @@ fn verify_fn(m: &Module, f: &Function) -> Result<(), VerifyError> {
                         format!("Return needs exactly 1 value on the stack, found {d}"),
                     ));
                 }
-                &[]
+                vec![]
             }
-            Op::Jump(t) => &[t as usize],
-            Op::JumpIfFalse(t) => &[pc + 1, t as usize],
-            _ => &[pc + 1],
+            Op::Fail => vec![],
+            Op::Jump(t) => vec![(t as usize, next_depth)],
+            Op::JumpIfFalse(t) => vec![(pc + 1, next_depth), (t as usize, next_depth)],
+            // The handler starts with the stack as it was here, plus the
+            // error message.
+            Op::TryBegin(t) => vec![(pc + 1, next_depth), (t as usize, next_depth + 1)],
+            _ => vec![(pc + 1, next_depth)],
         };
-        for &s in successors {
+        for (s, next_depth) in successors {
             if s >= n {
                 return Err(err(
                     Some(pc),
@@ -245,7 +256,7 @@ mod tests {
     fn module(code: Vec<Op>, num_locals: u32) -> Module {
         let positions = vec![Pos::default(); code.len()];
         Module {
-            source_name: "t".into(),
+            sources: vec!["t".into()],
             consts: vec![Const::Int(1)],
             functions: vec![Function {
                 name: "main".into(),
@@ -254,6 +265,7 @@ mod tests {
                 num_locals,
                 code,
                 positions,
+                source: 0,
             }],
             apps: vec![0],
         }
@@ -267,6 +279,21 @@ mod tests {
     fn accepts_simple_code() {
         assert_eq!(
             check(vec![Op::PushConst(0), Op::Say, Op::PushUnit, Op::Return]),
+            Ok(())
+        );
+        // try { fail } catch e { say e }
+        assert_eq!(
+            check(vec![
+                Op::TryBegin(5),
+                Op::PushConst(0),
+                Op::Fail,
+                Op::TryEnd,
+                Op::Jump(7),
+                Op::Store(0),
+                Op::Jump(7),
+                Op::PushUnit,
+                Op::Return
+            ]),
             Ok(())
         );
         // if/else merging at equal depth
@@ -311,6 +338,21 @@ mod tests {
             ),
             (vec![Op::Builtin(99), Op::Return], "unknown built-in"),
             (vec![Op::MakeArray(40_000), Op::Return], "too many items"),
+            (
+                vec![Op::TryBegin(50), Op::PushUnit, Op::Return],
+                "jump target",
+            ),
+            // The handler is entered with one more value than TryBegin had.
+            (
+                vec![
+                    Op::TryBegin(3),
+                    Op::PushUnit,
+                    Op::Return,
+                    Op::PushUnit,
+                    Op::Return,
+                ],
+                "exactly 1 value",
+            ),
             (vec![Op::PushUnit, Op::Index, Op::Return], "underflow"),
             (vec![Op::PushUnit, Op::MakeMap(1), Op::Return], "underflow"),
             (

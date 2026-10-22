@@ -42,6 +42,9 @@ pub enum Tok {
     True,
     False,
     Use,
+    Try,
+    Catch,
+    Fail,
     // punctuation
     LParen,
     RParen,
@@ -112,6 +115,9 @@ impl Tok {
             Tok::True => "true",
             Tok::False => "false",
             Tok::Use => "use",
+            Tok::Try => "try",
+            Tok::Catch => "catch",
+            Tok::Fail => "fail",
             Tok::LParen => "(",
             Tok::RParen => ")",
             Tok::LBrace => "{",
@@ -293,6 +299,9 @@ impl Lexer<'_> {
             "true" => Tok::True,
             "false" => Tok::False,
             "use" => Tok::Use,
+            "try" => Tok::Try,
+            "catch" => Tok::Catch,
+            "fail" => Tok::Fail,
             _ if RESERVED.contains(&text) => Tok::Reserved(text.to_string()),
             _ => Tok::Ident(text.to_string()),
         };
@@ -417,32 +426,12 @@ impl Lexer<'_> {
                 Some('{') => {
                     let open = Span::new(self.base + c_start, self.base + c_start + 1);
                     let expr_start = self.pos;
-                    let mut depth = 0usize;
-                    loop {
-                        match self.peek() {
-                            None | Some('\n') => {
-                                return Err(Diagnostic::error(
-                                    "unterminated `{` interpolation in string literal",
-                                    open,
-                                )
-                                .note("write `\\{` for a literal `{`"))
-                            }
-                            Some('"') => {
-                                let at = self.base + self.pos;
-                                return Err(Diagnostic::error(
-                                    "string literals are not allowed inside `{...}` interpolation",
-                                    Span::new(at, at + 1),
-                                )
-                                .note(
-                                    "store the string in a variable and interpolate the variable",
-                                ));
-                            }
-                            Some('{') => depth += 1,
-                            Some('}') if depth == 0 => break,
-                            Some('}') => depth -= 1,
-                            Some(_) => {}
-                        }
-                        self.bump();
+                    if !self.skip_interpolation() {
+                        return Err(Diagnostic::error(
+                            "unterminated `{` interpolation in string literal",
+                            open,
+                        )
+                        .note("write `\\{` for a literal `{`"));
                     }
                     let expr_src = &self.src[expr_start..self.pos];
                     self.bump();
@@ -469,6 +458,54 @@ impl Lexer<'_> {
         }
         self.push(Tok::Str(parts), start);
         Ok(())
+    }
+
+    /// Move to the `}` that closes an interpolation whose `{` was just
+    /// consumed. String literals inside it are skipped as a whole (so
+    /// `"{f("}")}"` works), including their own interpolations. Returns
+    /// false at a newline or end of input.
+    fn skip_interpolation(&mut self) -> bool {
+        let mut depth = 0usize;
+        loop {
+            match self.peek() {
+                None | Some('\n') => return false,
+                Some('}') if depth == 0 => return true,
+                Some('}') => depth -= 1,
+                Some('{') => depth += 1,
+                Some('"') => {
+                    self.bump();
+                    if !self.skip_string_body() {
+                        return false;
+                    }
+                    continue;
+                }
+                Some(_) => {}
+            }
+            self.bump();
+        }
+    }
+
+    /// Skip a string literal whose opening `"` was just consumed, through
+    /// its closing `"`.
+    fn skip_string_body(&mut self) -> bool {
+        loop {
+            match self.bump() {
+                None | Some('\n') => return false,
+                Some('"') => return true,
+                Some('\\') => {
+                    if matches!(self.bump(), None | Some('\n')) {
+                        return false;
+                    }
+                }
+                Some('{') => {
+                    if !self.skip_interpolation() {
+                        return false;
+                    }
+                    self.bump();
+                }
+                Some(_) => {}
+            }
+        }
     }
 
     fn punct(&mut self) -> Result<(), Diagnostic> {
@@ -673,8 +710,23 @@ mod tests {
             .message
             .contains("unknown escape"));
         assert!(lex(r#""{}""#, 0).unwrap_err().message.contains("empty"));
-        assert!(lex(r#""{"x"}""#, 0).is_err());
         assert!(lex(r#""{x""#, 0).is_err());
+        assert!(lex(r#""{f("x)}""#, 0).is_err());
+    }
+
+    #[test]
+    fn strings_inside_interpolation() {
+        // A string literal inside `{...}` may contain braces and quotes.
+        let t = lex(r#""a {f("}", "\"")} b {g("x {y} z")}""#, 0).unwrap();
+        let Tok::Str(parts) = &t[0].tok else { panic!() };
+        let exprs: Vec<&str> = parts
+            .iter()
+            .filter_map(|p| match p {
+                StrPart::Expr { src, .. } => Some(src.as_str()),
+                StrPart::Lit(_) => None,
+            })
+            .collect();
+        assert_eq!(exprs, [r#"f("}", "\"")"#, r#"g("x {y} z")"#]);
     }
 
     #[test]

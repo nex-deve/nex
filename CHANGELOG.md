@@ -9,6 +9,12 @@ Not tagged or released yet.
 
 ### Added
 
+- Stage 2: modules with `use` (`use lib.math` loads `lib/math.nex`);
+  `fail` and `try`/`catch` error handling across calls; file, input,
+  args, env, stderr, exit and time built-ins; `nex run --sandbox`;
+  `nex run file.nex -- args`; string literals inside `{...}`
+  interpolation. Bytecode format 3.
+
 - Language (step 1): `Float`; arrays `[T]` and maps `{K: V}` with value
   semantics, literals, indexing and element assignment; `for` loops over
   ranges, arrays and map keys; methods on arrays, strings and maps;
@@ -36,9 +42,8 @@ Not tagged or released yet.
 
 ### Known limitations
 
-- No structs/enums, closures or generics; no error values (`Result`).
-- No modules: every `use` is an "unresolved module" error.
-- No I/O beyond `say`; no JSON or HTTP.
+- No structs/enums, closures or generics.
+- No JSON, HTTP or sockets yet.
 - `nex test`, `nex fmt` and `nex repl` are not implemented (exit code 2).
 - The parser stops at the first syntax error.
 - Instruction count is unlimited unless `--max-steps` is given.

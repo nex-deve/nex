@@ -1,0 +1,13 @@
+5
+caught: cannot divide 1 by zero
+age 42
+bad -3: age cannot be negative
+bad abc: parse_int: "abc" is not a valid Int
+deep: index 5 is out of bounds for length 2
+inner caught inner
+outer caught outer from inner
+n=1
+n=3
+loop done at 4
+inside
+end

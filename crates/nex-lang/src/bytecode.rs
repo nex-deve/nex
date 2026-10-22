@@ -50,6 +50,14 @@ pub enum Op {
     Call(u32),
     /// Pop the return value, discard the frame, push the value to the caller.
     Return,
+    /// Install an error handler whose `catch` code starts at `t`. On an
+    /// error, the frame's operand stack is reset to its height here, the
+    /// message (Str) is pushed and execution continues at `t`.
+    TryBegin(u32),
+    /// Remove the innermost handler of the current frame.
+    TryEnd,
+    /// Pop a Str and raise it as an error.
+    Fail,
     /// Pop a value and print it followed by a newline.
     Say,
     /// Pop the arguments and the receiver of non-mutating method `id`, push
@@ -95,6 +103,9 @@ impl Op {
             Op::JumpIfFalse(_) => 0x41,
             Op::Call(_) => 0x42,
             Op::Return => 0x43,
+            Op::TryBegin(_) => 0x44,
+            Op::TryEnd => 0x45,
+            Op::Fail => 0x46,
             Op::Say => 0x50,
             Op::Method(_) => 0x60,
             Op::MethodMut(..) => 0x61,
@@ -114,6 +125,7 @@ impl Op {
             | Op::Jump(x)
             | Op::JumpIfFalse(x)
             | Op::Call(x)
+            | Op::TryBegin(x)
             | Op::Method(x)
             | Op::Builtin(x) => vec![x],
             Op::StoreIndex(a, b) | Op::MethodMut(a, b) => vec![a, b],
@@ -124,9 +136,20 @@ impl Op {
     /// Number of `u32` operands an opcode byte takes; `None` if unknown.
     pub fn operand_count(opcode: u8) -> Option<usize> {
         match opcode {
-            0x01 | 0x05 | 0x06 | 0x08 | 0x09 | 0x31 | 0x40 | 0x41 | 0x42 | 0x60 | 0x62 => Some(1),
+            0x01 | 0x05 | 0x06 | 0x08 | 0x09 | 0x31 | 0x40 | 0x41 | 0x42 | 0x44 | 0x60 | 0x62 => {
+                Some(1)
+            }
             0x0b | 0x61 => Some(2),
-            0x02..=0x04 | 0x07 | 0x0a | 0x10..=0x16 | 0x20..=0x25 | 0x30 | 0x43 | 0x50 => Some(0),
+            0x02..=0x04
+            | 0x07
+            | 0x0a
+            | 0x10..=0x16
+            | 0x20..=0x25
+            | 0x30
+            | 0x43
+            | 0x45
+            | 0x46
+            | 0x50 => Some(0),
             _ => None,
         }
     }
@@ -164,6 +187,9 @@ impl Op {
             0x41 => Op::JumpIfFalse(a),
             0x42 => Op::Call(a),
             0x43 => Op::Return,
+            0x44 => Op::TryBegin(a),
+            0x45 => Op::TryEnd,
+            0x46 => Op::Fail,
             0x50 => Op::Say,
             0x60 => Op::Method(a),
             0x61 => Op::MethodMut(a, b),
@@ -204,6 +230,9 @@ impl Op {
             Op::JumpIfFalse(_) => "JumpIfFalse",
             Op::Call(_) => "Call",
             Op::Return => "Return",
+            Op::TryBegin(_) => "TryBegin",
+            Op::TryEnd => "TryEnd",
+            Op::Fail => "Fail",
             Op::Say => "Say",
             Op::Method(_) => "Method",
             Op::MethodMut(..) => "MethodMut",
@@ -286,6 +315,19 @@ id_enum! {
         Round = 4, "round", 1, false;
         ParseInt = 5, "parse_int", 1, false;
         ParseFloat = 6, "parse_float", 1, false;
+        Input = 7, "input", 1, false;
+        ReadFile = 8, "read_file", 1, false;
+        WriteFile = 9, "write_file", 2, false;
+        AppendFile = 10, "append_file", 2, false;
+        FileExists = 11, "file_exists", 1, false;
+        ListDir = 12, "list_dir", 1, false;
+        DeleteFile = 13, "delete_file", 1, false;
+        Args = 14, "args", 0, false;
+        Env = 15, "env", 2, false;
+        Exit = 16, "exit", 1, false;
+        Eprint = 17, "eprint", 1, false;
+        TimeMs = 18, "time_ms", 0, false;
+        SleepMs = 19, "sleep_ms", 1, false;
     }
 }
 
@@ -325,11 +367,14 @@ pub struct Function {
     pub code: Vec<Op>,
     /// Source position of each instruction; same length as `code`.
     pub positions: Vec<Pos>,
+    /// Index into [`Module::sources`] of the file that declared it.
+    pub source: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Module {
-    pub source_name: String,
+    /// Names of the source files; `sources[0]` is the main file.
+    pub sources: Vec<String>,
     pub consts: Vec<Const>,
     pub functions: Vec<Function>,
     /// Indices into `functions` of the apps, in declaration order.
@@ -337,6 +382,13 @@ pub struct Module {
 }
 
 impl Module {
+    /// Name of the source file that declared `f`.
+    pub fn source_of(&self, f: &Function) -> &str {
+        self.sources
+            .get(f.source as usize)
+            .map_or("<unknown>", String::as_str)
+    }
+
     pub fn app_names(&self) -> Vec<&str> {
         self.apps
             .iter()
@@ -357,7 +409,7 @@ impl Module {
 /// Human-readable listing of a module, used by `nex disasm`.
 pub fn disassemble(m: &Module) -> String {
     let mut out = String::new();
-    let _ = writeln!(out, "; module {}", m.source_name);
+    let _ = writeln!(out, "; module {}", m.sources.join(", "));
     let _ = writeln!(out, "; constants");
     for (i, c) in m.consts.iter().enumerate() {
         let _ = match c {
@@ -443,6 +495,9 @@ mod tests {
             Op::JumpIfFalse(5),
             Op::Call(6),
             Op::Return,
+            Op::TryBegin(9),
+            Op::TryEnd,
+            Op::Fail,
             Op::Say,
             Op::Method(4),
             Op::MethodMut(1, 32),

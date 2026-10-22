@@ -1,0 +1,14 @@
+use lib.math
+use text
+
+app Main {
+    say math.square(7)
+    say math.hypot_sq(3, 4)
+    say text.shout("hello")
+    say text.banner("NEX")
+    try {
+        say math.safe_sqrt(-4.0)
+    } catch e {
+        say "error: {e}"
+    }
+}

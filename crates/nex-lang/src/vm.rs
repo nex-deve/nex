@@ -13,7 +13,7 @@ use crate::bytecode::{Builtin, Const, FnKind, Method, Module, Op, Pos};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -153,6 +153,8 @@ impl Default for Limits {
 pub struct TraceEntry {
     pub function: String,
     pub kind: FnKind,
+    /// Source file that declared the function.
+    pub file: String,
     pub pos: Pos,
 }
 
@@ -161,11 +163,14 @@ pub struct TraceEntry {
 pub struct RuntimeError {
     pub message: String,
     pub trace: Vec<TraceEntry>,
+    /// Whether `try`/`catch` may handle it. Exceeding the step limit and
+    /// invalid bytecode are never catchable.
+    pub catchable: bool,
 }
 
 impl RuntimeError {
     /// Render as `runtime error: ...` plus a call trace.
-    pub fn render(&self, source_name: &str) -> String {
+    pub fn render(&self) -> String {
         let mut out = format!("runtime error: {}\n", self.message);
         for t in &self.trace {
             let kind = match t.kind {
@@ -174,11 +179,38 @@ impl RuntimeError {
             };
             let _ = writeln!(
                 out,
-                "  at {kind} {} ({source_name}:{}:{})",
-                t.function, t.pos.line, t.pos.col
+                "  at {kind} {} ({}:{}:{})",
+                t.function, t.file, t.pos.line, t.pos.col
             );
         }
         out
+    }
+}
+
+/// Everything a program may touch outside the VM.
+pub struct Host<'h> {
+    /// Standard output (`say`).
+    pub out: &'h mut dyn Write,
+    /// Standard error (`eprint`).
+    pub err: &'h mut dyn Write,
+    /// Standard input (`input`).
+    pub input: &'h mut dyn BufRead,
+    /// Values returned by `args()`.
+    pub args: Vec<String>,
+    /// Whether file and environment built-ins are allowed. `false` is the
+    /// CLI's `--sandbox` mode.
+    pub allow_io: bool,
+}
+
+impl<'h> Host<'h> {
+    pub fn new(out: &'h mut dyn Write, err: &'h mut dyn Write, input: &'h mut dyn BufRead) -> Self {
+        Host {
+            out,
+            err,
+            input,
+            args: Vec::new(),
+            allow_io: true,
+        }
     }
 }
 
@@ -188,15 +220,31 @@ struct Frame {
     base: usize,
 }
 
-/// Run one app of a module. The module must have passed
-/// [`crate::verify::verify`]; unverified bytecode may produce runtime
-/// errors but never undefined behaviour.
+/// An active `try` block.
+struct Handler {
+    /// Number of frames when it was installed (it belongs to the last one).
+    frames: usize,
+    /// Value-stack height to restore before running the `catch` code.
+    stack: usize,
+    catch_pc: usize,
+}
+
+enum Flow {
+    Continue,
+    /// The app finished; `Some(code)` if it called `exit(code)`.
+    Finished(Option<i32>),
+}
+
+/// Run one app of a module. Returns `Some(code)` if the program called
+/// `exit(code)`. The module must have passed [`crate::verify::verify`];
+/// unverified bytecode may produce runtime errors but never undefined
+/// behaviour.
 pub fn run_app(
     module: &Module,
     app: u32,
-    out: &mut dyn Write,
+    host: &mut Host,
     limits: &Limits,
-) -> Result<(), RuntimeError> {
+) -> Result<Option<i32>, RuntimeError> {
     let consts = module
         .consts
         .iter()
@@ -209,10 +257,11 @@ pub fn run_app(
     let mut vm = Vm {
         m: module,
         consts,
-        out,
+        host,
         limits,
         stack: Vec::new(),
         frames: Vec::new(),
+        handlers: Vec::new(),
         steps: 0,
     };
     match module.functions.get(app as usize) {
@@ -220,16 +269,23 @@ pub fn run_app(
         _ => return Err(vm.error(format!("no app with index {app}"))),
     }
     vm.enter(app as usize)?;
-    vm.run()
+    loop {
+        match vm.step() {
+            Ok(Flow::Continue) => {}
+            Ok(Flow::Finished(code)) => return Ok(code),
+            Err(e) => vm.recover(e)?,
+        }
+    }
 }
 
-struct Vm<'a> {
+struct Vm<'a, 'h> {
     m: &'a Module,
     consts: Vec<Value>,
-    out: &'a mut dyn Write,
+    host: &'a mut Host<'h>,
     limits: &'a Limits,
     stack: Vec<Value>,
     frames: Vec<Frame>,
+    handlers: Vec<Handler>,
     steps: u64,
 }
 
@@ -295,8 +351,12 @@ fn char_index(s: &str, byte: usize) -> i64 {
     s[..byte].chars().count() as i64
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
+    /// A runtime error at the current position. Errors caused by invalid
+    /// bytecode cannot be caught.
     fn error(&self, message: impl Into<String>) -> RuntimeError {
+        let message = message.into();
+        let catchable = !message.contains("(invalid bytecode)");
         let trace = self
             .frames
             .iter()
@@ -307,13 +367,153 @@ impl Vm<'_> {
                 TraceEntry {
                     function: f.name.clone(),
                     kind: f.kind,
+                    file: self.m.source_of(f).to_string(),
                     pos: f.positions.get(pc).copied().unwrap_or_default(),
                 }
             })
             .collect();
         RuntimeError {
-            message: message.into(),
+            message,
             trace,
+            catchable,
+        }
+    }
+
+    /// An error that `try` cannot catch.
+    fn fatal(&self, message: impl Into<String>) -> RuntimeError {
+        RuntimeError {
+            catchable: false,
+            ..self.error(message)
+        }
+    }
+
+    /// Hand `e` to the innermost `try` handler, or give it back if there is
+    /// none or it cannot be caught.
+    fn recover(&mut self, e: RuntimeError) -> Result<(), RuntimeError> {
+        if !e.catchable {
+            return Err(e);
+        }
+        let Some(h) = self.handlers.pop() else {
+            return Err(e);
+        };
+        if h.frames == 0 || h.frames > self.frames.len() {
+            return Err(self.fatal("corrupt handler stack (invalid bytecode)"));
+        }
+        self.frames.truncate(h.frames);
+        self.stack.truncate(h.stack);
+        self.stack.push(Value::Str(Rc::from(e.message)));
+        self.frames.last_mut().expect("frame").pc = h.catch_pc;
+        Ok(())
+    }
+
+    /// Built-ins that reach outside the VM.
+    fn host_builtin(&mut self, b: Builtin, args: &[Value]) -> Res<Value> {
+        let s = |i: usize| want_str(args.get(i).ok_or("missing argument (invalid bytecode)")?);
+        let io_needed = matches!(
+            b,
+            Builtin::ReadFile
+                | Builtin::WriteFile
+                | Builtin::AppendFile
+                | Builtin::FileExists
+                | Builtin::ListDir
+                | Builtin::DeleteFile
+                | Builtin::Env
+        );
+        if io_needed && !self.host.allow_io {
+            return Err(format!(
+                "{}: file and environment access is disabled (--sandbox)",
+                b.name()
+            ));
+        }
+        match b {
+            Builtin::Input => {
+                let prompt = s(0)?;
+                let _ = write!(self.host.out, "{prompt}");
+                let _ = self.host.out.flush();
+                let mut line = String::new();
+                match self.host.input.read_line(&mut line) {
+                    Ok(0) => Err("input: no more input (end of file)".into()),
+                    Ok(_) => {
+                        let trimmed = line.trim_end_matches(['\n', '\r']);
+                        self.str_value(trimmed.to_string())
+                    }
+                    Err(e) => Err(format!("input: {e}")),
+                }
+            }
+            Builtin::ReadFile => {
+                let path = s(0)?;
+                let text = std::fs::read_to_string(&*path)
+                    .map_err(|e| format!("read_file: cannot read {:?}: {e}", &*path))?;
+                self.str_value(text)
+            }
+            Builtin::WriteFile | Builtin::AppendFile => {
+                let (path, text) = (s(0)?, s(1)?);
+                let result = if b == Builtin::WriteFile {
+                    std::fs::write(&*path, text.as_bytes())
+                } else {
+                    std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&*path)
+                        .and_then(|mut f| f.write_all(text.as_bytes()))
+                };
+                result.map_err(|e| format!("{}: cannot write {:?}: {e}", b.name(), &*path))?;
+                Ok(Value::Unit)
+            }
+            Builtin::FileExists => Ok(Value::Bool(std::path::Path::new(&*s(0)?).exists())),
+            Builtin::ListDir => {
+                let path = s(0)?;
+                let mut names: Vec<String> = std::fs::read_dir(&*path)
+                    .map_err(|e| format!("list_dir: cannot read {:?}: {e}", &*path))?
+                    .filter_map(|entry| entry.ok())
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .collect();
+                names.sort();
+                self.check_len(names.len())?;
+                Ok(Value::Array(Rc::new(
+                    names.into_iter().map(|n| Value::Str(Rc::from(n))).collect(),
+                )))
+            }
+            Builtin::DeleteFile => {
+                let path = s(0)?;
+                std::fs::remove_file(&*path)
+                    .map_err(|e| format!("delete_file: cannot delete {:?}: {e}", &*path))?;
+                Ok(Value::Unit)
+            }
+            Builtin::Args => Ok(Value::Array(Rc::new(
+                self.host
+                    .args
+                    .iter()
+                    .map(|a| Value::Str(Rc::from(a.as_str())))
+                    .collect(),
+            ))),
+            Builtin::Env => {
+                let (name, default) = (s(0)?, s(1)?);
+                Ok(match std::env::var(&*name) {
+                    Ok(v) => Value::Str(Rc::from(v)),
+                    Err(_) => Value::Str(default),
+                })
+            }
+            Builtin::Eprint => {
+                let text = s(0)?;
+                writeln!(self.host.err, "{text}").map_err(|e| format!("eprint: {e}"))?;
+                Ok(Value::Unit)
+            }
+            Builtin::TimeMs => {
+                let ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_millis() as i64);
+                Ok(Value::Int(ms))
+            }
+            Builtin::SleepMs => {
+                let ms = want_int(args.first().ok_or("missing argument (invalid bytecode)")?)?;
+                if ms < 0 {
+                    return Err(format!("sleep_ms({ms}): duration cannot be negative"));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+                Ok(Value::Unit)
+            }
+            other => self.builtin(other, args),
         }
     }
 
@@ -707,12 +907,17 @@ impl Vm<'_> {
                     _ => Err(format!("parse_float: {:?} is not a valid Float", &*s)),
                 }
             }
+            other => Err(format!(
+                "{} is not a pure built-in (invalid bytecode)",
+                other.name()
+            )),
         }
     }
 
-    fn run(&mut self) -> Result<(), RuntimeError> {
+    /// Execute one instruction.
+    fn step(&mut self) -> Result<Flow, RuntimeError> {
         let m = self.m;
-        loop {
+        {
             let frame = self.frames.last_mut().expect("run with no frame");
             let (func, pc, base) = (frame.func, frame.pc, frame.base);
             let f = &m.functions[func];
@@ -726,7 +931,7 @@ impl Vm<'_> {
             self.steps += 1;
             if let Some(max) = self.limits.max_steps {
                 if self.steps > max {
-                    return Err(self.error(format!("step limit of {max} instructions exceeded")));
+                    return Err(self.fatal(format!("step limit of {max} instructions exceeded")));
                 }
             }
 
@@ -889,14 +1094,45 @@ impl Vm<'_> {
                     let v = self.pop()?;
                     let done = self.frames.pop().expect("frame");
                     self.stack.truncate(done.base);
+                    // Handlers of the finished frame (from a `return` inside
+                    // `try`) no longer apply.
+                    while self
+                        .handlers
+                        .last()
+                        .is_some_and(|h| h.frames > self.frames.len())
+                    {
+                        self.handlers.pop();
+                    }
                     if self.frames.is_empty() {
-                        return Ok(());
+                        return Ok(Flow::Finished(None));
                     }
                     self.push(v)?;
                 }
+                Op::TryBegin(t) => {
+                    self.handlers.push(Handler {
+                        frames: self.frames.len(),
+                        stack: self.stack.len(),
+                        catch_pc: t as usize,
+                    });
+                }
+                Op::TryEnd => {
+                    if self
+                        .handlers
+                        .last()
+                        .is_none_or(|h| h.frames != self.frames.len())
+                    {
+                        return Err(self.error("TryEnd without a handler (invalid bytecode)"));
+                    }
+                    self.handlers.pop();
+                }
+                Op::Fail => {
+                    let v = self.pop()?;
+                    let message = vm_try!(want_str(&v));
+                    return Err(self.error(message.to_string()));
+                }
                 Op::Say => {
                     let v = self.pop()?;
-                    if let Err(e) = writeln!(self.out, "{v}") {
+                    if let Err(e) = writeln!(self.host.out, "{v}") {
                         return Err(self.error(format!("failed to write output: {e}")));
                     }
                 }
@@ -929,11 +1165,22 @@ impl Vm<'_> {
                         return Err(self.error("invalid built-in (invalid bytecode)"));
                     };
                     let args = self.pop_n(b.argc() as usize)?;
-                    let v = vm_try!(self.builtin(b, &args));
+                    if b == Builtin::Exit {
+                        let code = vm_try!(want_int(&args[0]));
+                        if !(0..=255).contains(&code) {
+                            return Err(self.error(format!(
+                                "exit({code}): the exit code must be between 0 and 255"
+                            )));
+                        }
+                        let _ = self.host.out.flush();
+                        return Ok(Flow::Finished(Some(code as i32)));
+                    }
+                    let v = vm_try!(self.host_builtin(b, &args));
                     self.push(v)?;
                 }
             }
         }
+        Ok(Flow::Continue)
     }
 }
 

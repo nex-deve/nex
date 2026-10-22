@@ -25,7 +25,7 @@ here is rejected with a compile error rather than silently ignored.
 
 ### Keywords
 
-`app fn let var say return if else while for in break continue true false use`
+`app fn let var say return if else while for in break continue true false use try catch fail`
 
 Reserved for future use (rejected as identifiers):
 `const struct enum match loop pub mod import nil`
@@ -61,8 +61,8 @@ say "total: {a + b}, first: {items[0]}"
 ```
 
 - Any expression whose type is not `Unit` may be interpolated.
-- The expression may not contain a string literal (`"`), and may not span
-  lines. Bind the string to a variable first.
+- The expression may contain string literals (`"{names.join(", ")}"`) but
+  may not span lines.
 - `{}` (empty) is an error. Write `\{` for a literal `{`. A lone `}` is
   literal text.
 
@@ -101,6 +101,8 @@ stmt       = ("let" | "var") IDENT [ ":" type ] "=" expr
            | if_stmt
            | "while" expr block
            | "for" IDENT "in" ( expr ".." expr | expr ) block
+           | "try" block { NL } "catch" IDENT block
+           | "fail" expr
            | "break" | "continue"
            | block
            | expr ;
@@ -295,22 +297,93 @@ Strings cannot be indexed with `[]`; use `chars()` or `slice`.
 
 ## 12. Modules and imports
 
-`use a.b` is parsed and resolved. This version ships **no importable
-modules**, so every `use` is a compile error: `unresolved module `a.b``.
-Module resolution, circular-import handling, `net.http` and the rest of
-the standard library are future milestones (see ROADMAP.md).
+```
+use lib.math        // loads lib/math.nex next to the main file
+use text            // loads text.nex
+
+app Main {
+    say math.square(4)
+    say text.shout("hi")
+}
+```
+
+- `use a.b.c` loads `a/b/c.nex`, relative to the directory of the main
+  file. Its functions are called with the last path segment as prefix:
+  `c.name(...)`. Two imports with the same last segment are an error.
+- A module contains only `fn` (and `use`) declarations; an `app` in a
+  module is an error. Functions inside a module call each other by plain
+  name.
+- Every module is loaded once, however many files import it. Because
+  modules contain only declarations, circular imports are allowed.
+- A missing file is a compile error: `unresolved module `a.b``. There is
+  no standard-library module yet (`net.http` is planned).
+- Errors in a module are reported against that module's file.
 
 ## 13. Errors
 
 - **Compile errors** (syntax, names, types) are reported with file, line,
-  column and a source snippet. The parser stops at the first syntax error;
-  semantic analysis reports every error it finds. A program with any
-  compile error never runs.
+  column and a source snippet. The parser stops at the first syntax error
+  in each file; semantic analysis reports every error it finds. A program
+  with any compile error never runs.
 - **Runtime errors** (overflow, division by zero, index out of bounds,
-  missing map key, invalid parse, resource limits) stop the program.
-  Output already produced remains. The error shows a call trace with
-  source positions. There is no exception handling yet; a runtime error in
-  one app stops the remaining apps.
+  missing map key, invalid parse, failed I/O, `fail`, resource limits)
+  stop the program unless caught. Output already produced remains. The
+  error shows a call trace with source positions.
+
+### `fail`, `try` and `catch`
+
+```
+fn withdraw(balance: Int, amount: Int) -> Int {
+    if amount > balance {
+        fail "not enough money"
+    }
+    return balance - amount
+}
+
+try {
+    say withdraw(10, 50)
+} catch err {
+    say "refused: {err}"      // err is the message, a Str
+}
+```
+
+- `fail message` raises an error with a `Str` message. It ends the
+  current path like `return` (it counts as returning for the
+  "missing return" check).
+- `try { ... } catch name { ... }` runs the first block; if any runtime
+  error happens inside it, including inside functions it calls, the rest
+  of the block is skipped and the `catch` block runs with `name` bound to
+  the message. `name` is immutable and visible only in the `catch` block.
+- `try` blocks nest; the innermost one catches. A `catch` block may itself
+  `fail` to pass the error outward.
+- `return`, `break` and `continue` may leave a `try` block normally.
+- Not catchable: exceeding `--max-steps`, and invalid bytecode. Everything
+  else (including call-depth and size limits) can be caught.
+
+## 13a. Input, output and the system
+
+| Function | Type | Notes |
+|---|---|---|
+| `input(prompt)` | Str → Str | prints `prompt`, reads one line from standard input (without the newline); runtime error at end of input |
+| `read_file(path)` | Str → Str | whole file as UTF-8 |
+| `write_file(path, text)` | Str, Str → Unit | creates or replaces |
+| `append_file(path, text)` | Str, Str → Unit | creates if missing |
+| `file_exists(path)` | Str → Bool | |
+| `list_dir(path)` | Str → [Str] | entry names, sorted |
+| `delete_file(path)` | Str → Unit | |
+| `args()` | → [Str] | arguments after `--` in `nex run file.nex -- a b` |
+| `env(name, default)` | Str, Str → Str | environment variable, or `default` |
+| `eprint(text)` | Str → Unit | writes a line to standard error |
+| `exit(code)` | Int → Unit | ends the program with exit code 0–255 |
+| `time_ms()` | → Int | milliseconds since 1970-01-01 UTC |
+| `sleep_ms(ms)` | Int → Unit | pauses |
+
+Relative paths are relative to the current working directory. Failed
+file operations are runtime errors (catchable) whose message starts with
+the function name, e.g. `read_file: cannot read "x.txt": ...`.
+
+`nex run --sandbox` disables the file functions and `env` (they raise
+`... is disabled (--sandbox)`); the others keep working.
 
 ## 14. Execution model and limits
 

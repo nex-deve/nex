@@ -1,0 +1,3 @@
+compile
+unresolved module `missing.thing`
+looked for `missing/thing.nex` next to the main file

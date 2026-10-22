@@ -1,0 +1,5 @@
+runtime
+ok
+runtime error: too big: 99
+at fn check (err_uncaught_fail.nex:3:9)
+at app Main (err_uncaught_fail.nex:10:5)

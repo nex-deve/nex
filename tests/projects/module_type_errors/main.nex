@@ -1,0 +1,7 @@
+use helpers
+
+app Main {
+    say helpers.twice("x")
+    say helpers.nope(1)
+    say helpers
+}

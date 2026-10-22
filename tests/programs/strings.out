@@ -4,3 +4,4 @@ braces: { and } and plain }
 tab:	quote:" backslash:\
 unicode: হ্যালো 👋 café
 
+joined: a-b, upper: NEX

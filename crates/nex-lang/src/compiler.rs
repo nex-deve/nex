@@ -5,70 +5,80 @@
 
 use crate::ast::*;
 use crate::bytecode::{Builtin, Const, FnKind, Function, Method, Module, Op, Pos};
-use crate::sema::Analysis;
+use crate::project::Unit;
+use crate::sema::{qualified, Analysis};
 use crate::span::SourceFile;
 use crate::types::Type;
 use std::collections::HashMap;
 
-pub fn compile(program: &Program, analysis: &Analysis, src: &SourceFile) -> Module {
+/// Compile every unit of a project. Functions are named by their qualified
+/// name (`lib.math.square`); only the main unit (`units[0]`) has apps.
+pub fn compile(units: &[Unit], analysis: &Analysis, files: &[SourceFile]) -> Module {
     let mut fn_index = HashMap::new();
     let mut next = 0u32;
-    for item in &program.items {
-        match item {
-            Item::Fn(f) => {
-                fn_index.insert(f.name.name.clone(), next);
-                next += 1;
+    for unit in units {
+        for item in &unit.program.items {
+            match item {
+                Item::Fn(f) => {
+                    fn_index.insert(qualified(&unit.name, &f.name.name), next);
+                    next += 1;
+                }
+                Item::App(_) => next += 1,
+                Item::Use(_) => {}
             }
-            Item::App(_) => next += 1,
-            Item::Use(_) => {}
         }
     }
 
     let mut consts = Consts::default();
     let mut functions = Vec::new();
     let mut apps = Vec::new();
-    for item in &program.items {
-        let mut b = FnBuilder {
-            analysis,
-            src,
-            fn_index: &fn_index,
-            consts: &mut consts,
-            code: Vec::new(),
-            positions: Vec::new(),
-            scopes: vec![HashMap::new()],
-            num_locals: 0,
-            loops: Vec::new(),
-        };
-        let function = match item {
-            Item::Fn(f) => {
-                for p in &f.params {
-                    b.declare(&p.name.name);
+    for unit in units {
+        let src = &files[unit.file as usize];
+        for item in &unit.program.items {
+            let mut b = FnBuilder {
+                analysis,
+                src,
+                fn_index: &fn_index,
+                consts: &mut consts,
+                code: Vec::new(),
+                positions: Vec::new(),
+                scopes: vec![HashMap::new()],
+                num_locals: 0,
+                loops: Vec::new(),
+                try_depth: 0,
+            };
+            let function = match item {
+                Item::Fn(f) => {
+                    let name = qualified(&unit.name, &f.name.name);
+                    for p in &f.params {
+                        b.declare(&p.name.name);
+                    }
+                    b.block_stmts(&f.body.stmts);
+                    let returns_unit = analysis
+                        .fns
+                        .get(&name)
+                        .is_none_or(|sig| sig.ret == Type::Unit);
+                    if returns_unit || !block_diverges(&f.body) {
+                        b.emit(Op::PushUnit, f.body.span.end.saturating_sub(1));
+                        b.emit(Op::Return, f.body.span.end.saturating_sub(1));
+                    }
+                    b.finish(&name, FnKind::Fn, f.params.len() as u32, unit.file)
                 }
-                b.block_stmts(&f.body.stmts);
-                let returns_unit = analysis
-                    .fns
-                    .get(&f.name.name)
-                    .is_none_or(|sig| sig.ret == Type::Unit);
-                if returns_unit || !block_diverges(&f.body) {
-                    b.emit(Op::PushUnit, f.body.span.end.saturating_sub(1));
-                    b.emit(Op::Return, f.body.span.end.saturating_sub(1));
+                Item::App(a) => {
+                    b.block_stmts(&a.body.stmts);
+                    b.emit(Op::PushUnit, a.body.span.end.saturating_sub(1));
+                    b.emit(Op::Return, a.body.span.end.saturating_sub(1));
+                    apps.push(functions.len() as u32);
+                    b.finish(&a.name.name, FnKind::App, 0, unit.file)
                 }
-                b.finish(&f.name.name, FnKind::Fn, f.params.len() as u32)
-            }
-            Item::App(a) => {
-                b.block_stmts(&a.body.stmts);
-                b.emit(Op::PushUnit, a.body.span.end.saturating_sub(1));
-                b.emit(Op::Return, a.body.span.end.saturating_sub(1));
-                apps.push(functions.len() as u32);
-                b.finish(&a.name.name, FnKind::App, 0)
-            }
-            Item::Use(_) => continue,
-        };
-        functions.push(function);
+                Item::Use(_) => continue,
+            };
+            functions.push(function);
+        }
     }
 
     Module {
-        source_name: src.name.clone(),
+        sources: files.iter().map(|f| f.name.clone()).collect(),
         consts: consts.list,
         functions,
         apps,
@@ -122,6 +132,9 @@ struct LoopCx {
     continue_to: Option<u32>,
     continues: Vec<usize>,
     breaks: Vec<usize>,
+    /// `try` nesting depth when the loop started; `break`/`continue` must
+    /// remove the handlers installed since then.
+    try_depth: usize,
 }
 
 struct FnBuilder<'a> {
@@ -134,10 +147,12 @@ struct FnBuilder<'a> {
     scopes: Vec<HashMap<String, u32>>,
     num_locals: u32,
     loops: Vec<LoopCx>,
+    /// Number of enclosing `try` blocks at the current point.
+    try_depth: usize,
 }
 
 impl FnBuilder<'_> {
-    fn finish(self, name: &str, kind: FnKind, arity: u32) -> Function {
+    fn finish(self, name: &str, kind: FnKind, arity: u32, source: u32) -> Function {
         Function {
             name: name.to_string(),
             kind,
@@ -145,6 +160,15 @@ impl FnBuilder<'_> {
             num_locals: self.num_locals,
             code: self.code,
             positions: self.positions,
+            source,
+        }
+    }
+
+    /// Leave the `try` blocks entered since the innermost loop started.
+    fn exit_tries_for_loop(&mut self, at: usize) {
+        let loop_depth = self.loops.last().expect("inside a loop").try_depth;
+        for _ in loop_depth..self.try_depth {
+            self.emit(Op::TryEnd, at);
         }
     }
 
@@ -279,13 +303,42 @@ impl FnBuilder<'_> {
                     continue_to: Some(start),
                     continues: Vec::new(),
                     breaks: Vec::new(),
+                    try_depth: self.try_depth,
                 });
                 self.block(body);
                 self.emit(Op::Jump(start), at);
                 self.end_loop(jf);
             }
             StmtKind::For { var, iter, body } => self.for_loop(var, iter, body, at),
+            StmtKind::Try { body, err, handler } => {
+                // TryBegin(catch)  body  TryEnd  Jump(end)
+                // catch: Store(err)  handler
+                // end:
+                let begin = self.emit(Op::TryBegin(0), at);
+                self.try_depth += 1;
+                self.block(body);
+                self.try_depth -= 1;
+                let jend = (!block_diverges(body)).then(|| {
+                    self.emit(Op::TryEnd, body.span.end.saturating_sub(1));
+                    self.emit(Op::Jump(0), at)
+                });
+                let catch_at = self.here();
+                self.code[begin] = Op::TryBegin(catch_at);
+                self.scopes.push(HashMap::new());
+                let slot = self.declare(&err.name);
+                self.emit(Op::Store(slot), err.span.start);
+                self.block_stmts(&handler.stmts);
+                self.scopes.pop();
+                if let Some(j) = jend {
+                    self.patch(j);
+                }
+            }
+            StmtKind::Fail(message) => {
+                self.expr(message);
+                self.emit(Op::Fail, at);
+            }
             StmtKind::Break => {
+                self.exit_tries_for_loop(at);
                 let j = self.emit(Op::Jump(0), at);
                 self.loops
                     .last_mut()
@@ -294,6 +347,7 @@ impl FnBuilder<'_> {
                     .push(j);
             }
             StmtKind::Continue => {
+                self.exit_tries_for_loop(at);
                 let cx = self.loops.last().expect("continue outside loop");
                 match cx.continue_to {
                     Some(target) => {
@@ -374,6 +428,7 @@ impl FnBuilder<'_> {
             continue_to: None,
             continues: Vec::new(),
             breaks: Vec::new(),
+            try_depth: self.try_depth,
         });
         self.block(body);
         self.scopes.pop();
@@ -437,6 +492,16 @@ impl FnBuilder<'_> {
                 self.expr(base);
                 self.expr(index);
                 self.emit(Op::Index, index.span.start);
+            }
+            ExprKind::MethodCall { method, args, .. }
+                if self.analysis.calls.contains_key(&e.id) =>
+            {
+                // `module.function(args)`
+                for a in args {
+                    self.expr(a);
+                }
+                let index = self.fn_index[&self.analysis.calls[&e.id]];
+                self.emit(Op::Call(index), method.span.start);
             }
             ExprKind::MethodCall {
                 receiver,
@@ -539,10 +604,12 @@ impl FnBuilder<'_> {
                     self.emit(Op::Builtin(b.id()), callee.span.start);
                     return;
                 }
-                let index = *self
-                    .fn_index
-                    .get(&callee.name)
+                let target = self
+                    .analysis
+                    .calls
+                    .get(&e.id)
                     .unwrap_or_else(|| panic!("unresolved function `{}`", callee.name));
+                let index = self.fn_index[target];
                 self.emit(Op::Call(index), callee.span.start);
             }
         }

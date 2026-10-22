@@ -109,6 +109,14 @@ pub enum StmtKind {
         iter: ForIter,
         body: Block,
     },
+    /// `try { body } catch err { handler }`; `err` is the error message.
+    Try {
+        body: Block,
+        err: Ident,
+        handler: Block,
+    },
+    /// `fail message`: raise an error with this message.
+    Fail(Expr),
     Break,
     Continue,
     Block(Block),
@@ -228,12 +236,13 @@ pub fn block_diverges(block: &Block) -> bool {
 
 pub fn stmt_diverges(stmt: &Stmt) -> bool {
     match &stmt.kind {
-        StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue => true,
+        StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue | StmtKind::Fail(_) => true,
         StmtKind::If {
             then,
             else_: Some(else_),
             ..
         } => block_diverges(then) && else_diverges(else_),
+        StmtKind::Try { body, handler, .. } => block_diverges(body) && block_diverges(handler),
         StmtKind::Block(b) => block_diverges(b),
         _ => false,
     }
@@ -246,15 +255,16 @@ fn else_diverges(e: &ElseBranch) -> bool {
     }
 }
 
-/// True if every path through `block` ends in `return` (used for the
-/// "missing return" check; `break`/`continue` do not count).
+/// True if every path through `block` ends in `return` or `fail` (used for
+/// the "missing return" check; `break`/`continue` do not count).
 pub fn block_returns(block: &Block) -> bool {
     block.stmts.iter().any(stmt_returns)
 }
 
 fn stmt_returns(stmt: &Stmt) -> bool {
     match &stmt.kind {
-        StmtKind::Return(_) => true,
+        StmtKind::Return(_) | StmtKind::Fail(_) => true,
+        StmtKind::Try { body, handler, .. } => block_returns(body) && block_returns(handler),
         StmtKind::If {
             then,
             else_: Some(else_),

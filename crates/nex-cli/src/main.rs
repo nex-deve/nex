@@ -3,11 +3,12 @@
 use nex_lang::artifact;
 use nex_lang::bytecode::{disassemble, Module};
 use nex_lang::diag::render_snippet;
+use nex_lang::project::FsLoader;
 use nex_lang::span::SourceFile;
 use nex_lang::verify::verify;
-use nex_lang::vm::{self, Limits, RuntimeError};
+use nex_lang::vm::{self, Host, Limits, RuntimeError};
 use std::fs;
-use std::io::{self, BufWriter, Write};
+use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -25,7 +26,8 @@ USAGE:
     nex <COMMAND> [OPTIONS]
 
 COMMANDS:
-    run [FILE]        Compile and run a .nex file, or run a built .nexdeve file
+    run [FILE] [-- ARGS]  Compile and run a .nex file (or a built .nexdeve file);
+                      ARGS are passed to the program's args()
     check [FILE]      Check a .nex file for syntax and type errors without running it
     build [FILE]      Compile a .nex file to a verified bytecode file (.nexdeve)
     disasm [FILE]     Print the bytecode of a .nex or .nexdeve file
@@ -39,6 +41,7 @@ OPTIONS:
     --app <NAME>            (run) Run only the app named NAME
     --max-steps <N>         (run) Stop after N VM instructions
     --max-call-depth <N>    (run) Maximum call depth (default 1000)
+    --sandbox               (run) Disable file and environment access
     -o, --output <PATH>     (build) Output path (default: FILE with .nexdeve extension,
                             or target/main.nexdeve inside a project)
     -h, --help              Show this help
@@ -50,6 +53,7 @@ EXIT CODES:
     2  usage error, I/O error or unimplemented command
     3  runtime error
     4  invalid or corrupted .nexdeve file
+    A program that calls exit(code) ends with that code instead.
 
 Not implemented yet: nex test, nex fmt, nex repl (see ROADMAP.md).
 ";
@@ -110,6 +114,9 @@ struct Opts {
     output: Option<String>,
     max_steps: Option<u64>,
     max_call_depth: Option<usize>,
+    sandbox: bool,
+    /// Everything after `--`, for the program's `args()`.
+    script_args: Vec<String>,
 }
 
 /// Parse `[FILE] [--flag value]...`; `allowed` lists the flags this command takes.
@@ -117,6 +124,14 @@ fn parse_opts(args: &[String], allowed: &[&str]) -> Result<Opts, String> {
     let mut opts = Opts::default();
     let mut it = args.iter();
     while let Some(arg) = it.next() {
+        if arg == "--" && allowed.contains(&"--") {
+            opts.script_args = it.by_ref().cloned().collect();
+            break;
+        }
+        if arg == "--sandbox" && allowed.contains(&"--sandbox") {
+            opts.sandbox = true;
+            continue;
+        }
         let flag = match arg.as_str() {
             "-o" => "--output",
             other => other,
@@ -176,25 +191,29 @@ fn read_source(path: &Path) -> Result<SourceFile, String> {
     Ok(SourceFile::new(path.display().to_string(), text))
 }
 
-/// Compile a source file, printing diagnostics on failure.
-fn compile(src: &SourceFile) -> Result<Module, u8> {
-    nex_lang::compile_source(src).map_err(|diags| {
-        for d in &diags {
-            eprintln!("{}", d.render(src));
-        }
+/// Compile a source file and the modules it uses (found next to it),
+/// printing diagnostics on failure.
+fn compile(path: &Path, src: SourceFile) -> Result<(Module, Vec<SourceFile>), u8> {
+    let root = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let name = src.name.clone();
+    nex_lang::compile_project(src, root, &mut FsLoader).map_err(|e| {
+        eprintln!("{}", e.render());
+        let n = e.diagnostics.len();
         eprintln!(
-            "error: could not compile `{}` due to {} error{}",
-            src.name,
-            diags.len(),
-            if diags.len() == 1 { "" } else { "s" }
+            "error: could not compile `{name}` due to {n} error{}",
+            if n == 1 { "" } else { "s" }
         );
         EXIT_COMPILE
     })
 }
 
 /// Load and verify a module from a `.nex` source or a `.nexdeve` artifact.
-/// On failure, returns the command result to finish with.
-fn load(path: &Path) -> Result<(Module, Option<SourceFile>), CmdResult> {
+/// On failure, returns the command result to finish with. The source files
+/// are returned for error snippets (none for artifacts).
+fn load(path: &Path) -> Result<(Module, Vec<SourceFile>), CmdResult> {
     if is_artifact(path) {
         let bytes =
             fs::read(path).map_err(|e| Err(format!("cannot read `{}`: {e}", path.display())))?;
@@ -209,18 +228,26 @@ fn load(path: &Path) -> Result<(Module, Option<SourceFile>), CmdResult> {
             );
             Ok(EXIT_BAD_ARTIFACT)
         })?;
-        Ok((module, None))
+        Ok((module, Vec::new()))
     } else {
         let src = read_source(path).map_err(Err)?;
-        let module = compile(&src).map_err(Ok)?;
-        Ok((module, Some(src)))
+        compile(path, src).map_err(Ok)
     }
 }
 
 fn cmd_run(args: &[String]) -> CmdResult {
-    let opts = parse_opts(args, &["--app", "--max-steps", "--max-call-depth"])?;
+    let opts = parse_opts(
+        args,
+        &[
+            "--app",
+            "--max-steps",
+            "--max-call-depth",
+            "--sandbox",
+            "--",
+        ],
+    )?;
     let (path, _) = input_path(&opts)?;
-    let (module, src) = match load(&path) {
+    let (module, files) = match load(&path) {
         Ok(loaded) => loaded,
         Err(result) => return result,
     };
@@ -258,23 +285,41 @@ fn cmd_run(args: &[String]) -> CmdResult {
 
     let stdout = io::stdout();
     let mut out = BufWriter::new(stdout.lock());
+    let mut err = io::stderr();
+    let stdin = io::stdin();
+    let mut input = stdin.lock();
+    let mut host = Host::new(&mut out, &mut err, &mut input);
+    host.args = opts.script_args.clone();
+    host.allow_io = !opts.sandbox;
+    let mut exit_code = None;
     for app in apps {
-        if let Err(e) = vm::run_app(&module, app, &mut out, &limits) {
-            let _ = out.flush();
-            eprint!("{}", render_runtime_error(&e, &module, src.as_ref()));
-            return Ok(EXIT_RUNTIME);
+        match vm::run_app(&module, app, &mut host, &limits) {
+            Ok(None) => {}
+            Ok(Some(code)) => {
+                exit_code = Some(code);
+                break;
+            }
+            Err(e) => {
+                let _ = host.out.flush();
+                eprint!("{}", render_runtime_error(&e, &files));
+                return Ok(EXIT_RUNTIME);
+            }
         }
     }
-    if let Err(e) = out.flush() {
+    if let Err(e) = host.out.flush() {
         eprintln!("error: failed to write output: {e}");
         return Ok(EXIT_RUNTIME);
     }
-    Ok(EXIT_OK)
+    Ok(exit_code.map_or(EXIT_OK, |c| c as u8))
 }
 
-fn render_runtime_error(e: &RuntimeError, module: &Module, src: Option<&SourceFile>) -> String {
-    let mut out = e.render(&module.source_name);
-    if let (Some(src), Some(top)) = (src, e.trace.first()) {
+fn render_runtime_error(e: &RuntimeError, files: &[SourceFile]) -> String {
+    let mut out = e.render();
+    let top = e
+        .trace
+        .first()
+        .and_then(|t| files.iter().find(|f| f.name == t.file).map(|f| (t, f)));
+    if let Some((top, src)) = top {
         render_snippet(
             &mut out,
             src,
@@ -294,9 +339,10 @@ fn cmd_check(args: &[String]) -> CmdResult {
         return Err("`nex check` takes a .nex source file".into());
     }
     let src = read_source(&path)?;
-    match compile(&src) {
+    let name = src.name.clone();
+    match compile(&path, src) {
         Ok(_) => {
-            println!("ok: `{}` has no errors", src.name);
+            println!("ok: `{name}` has no errors");
             Ok(EXIT_OK)
         }
         Err(code) => Ok(code),
@@ -310,8 +356,8 @@ fn cmd_build(args: &[String]) -> CmdResult {
         return Err("`nex build` takes a .nex source file".into());
     }
     let src = read_source(&path)?;
-    let module = match compile(&src) {
-        Ok(m) => m,
+    let module = match compile(&path, src) {
+        Ok((m, _)) => m,
         Err(code) => return Ok(code),
     };
     let out_path = match &opts.output {

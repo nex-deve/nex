@@ -10,6 +10,7 @@
 use crate::ast::*;
 use crate::bytecode::{Builtin, Method};
 use crate::diag::Diagnostic;
+use crate::project::Unit;
 use crate::span::Span;
 use crate::types::Type;
 use std::collections::HashMap;
@@ -24,9 +25,13 @@ pub struct FnSig {
 #[derive(Debug, Default)]
 pub struct Analysis {
     pub types: HashMap<ExprId, Type>,
+    /// Signatures keyed by qualified name (`add`, `lib.math.square`).
     pub fns: HashMap<String, FnSig>,
     /// Resolved method of every method-call expression.
     pub methods: HashMap<ExprId, Method>,
+    /// Qualified callee of every call to a user function, including module
+    /// calls written `math.square(x)`.
+    pub calls: HashMap<ExprId, String>,
 }
 
 #[derive(Clone)]
@@ -44,48 +49,77 @@ struct Checker {
     diags: Vec<Diagnostic>,
     types: HashMap<ExprId, Type>,
     methods: HashMap<ExprId, Method>,
+    calls: HashMap<ExprId, String>,
     globals: HashMap<String, Global>,
     scopes: Vec<HashMap<String, Local>>,
+    /// Module name of the unit being checked; empty for the main file.
+    module: String,
+    /// Imports visible in the unit being checked: alias to module name.
+    imports: HashMap<String, String>,
     /// Return type of the function being checked; `None` inside an app.
     ret: Option<Type>,
     in_app: bool,
     loop_depth: usize,
 }
 
+/// Name of function `name` declared in `module`.
+pub fn qualified(module: &str, name: &str) -> String {
+    if module.is_empty() {
+        name.to_string()
+    } else {
+        format!("{module}.{name}")
+    }
+}
+
+/// Analyze a single-file program. `use` declarations are ignored here; the
+/// project loader resolves them.
 pub fn analyze(program: &Program) -> Result<Analysis, Vec<Diagnostic>> {
+    analyze_units(&[Unit {
+        name: String::new(),
+        file: 0,
+        program: program.clone(),
+        imports: HashMap::new(),
+    }])
+}
+
+/// Analyze every file of a project together.
+pub fn analyze_units(units: &[Unit]) -> Result<Analysis, Vec<Diagnostic>> {
     let mut cx = Checker {
         diags: Vec::new(),
         types: HashMap::new(),
         methods: HashMap::new(),
+        calls: HashMap::new(),
         globals: HashMap::new(),
         scopes: Vec::new(),
+        module: String::new(),
+        imports: HashMap::new(),
         ret: None,
         in_app: false,
         loop_depth: 0,
     };
 
-    for item in &program.items {
-        match item {
-            Item::Use(u) => {
-                let path: Vec<&str> = u.path.iter().map(|p| p.name.as_str()).collect();
-                cx.error(
-                    Diagnostic::error(format!("unresolved module `{}`", path.join(".")), u.span)
-                        .note("this version of NEX has no importable modules; see ROADMAP.md"),
-                );
+    for unit in units {
+        for item in &unit.program.items {
+            match item {
+                Item::Use(_) => {}
+                Item::Fn(f) => {
+                    let sig = cx.signature(f);
+                    cx.declare_global(&unit.name, &f.name, Global::Fn(sig));
+                }
+                Item::App(a) => cx.declare_global(&unit.name, &a.name, Global::App),
             }
-            Item::Fn(f) => {
-                let sig = cx.signature(f);
-                cx.declare_global(&f.name, Global::Fn(sig));
-            }
-            Item::App(a) => cx.declare_global(&a.name, Global::App),
         }
     }
 
-    for item in &program.items {
-        match item {
-            Item::Fn(f) => cx.check_fn(f),
-            Item::App(a) => cx.check_app(a),
-            Item::Use(_) => {}
+    for unit in units {
+        cx.module = unit.name.clone();
+        cx.imports = unit.imports.clone();
+        for item in &unit.program.items {
+            match item {
+                Item::Fn(f) => cx.check_fn(f),
+                Item::App(a) => cx.check_app(a),
+                Item::Use(_) => {}
+            }
         }
     }
 
@@ -104,6 +138,7 @@ pub fn analyze(program: &Program) -> Result<Analysis, Vec<Diagnostic>> {
         types: cx.types,
         fns,
         methods: cx.methods,
+        calls: cx.calls,
     })
 }
 
@@ -170,6 +205,18 @@ fn builtin_sig(b: Builtin) -> (Vec<Type>, Type) {
         Builtin::Sqrt | Builtin::Floor | Builtin::Round => (vec![Type::Float], Type::Float),
         Builtin::ParseInt => (vec![Type::Str], Type::Int),
         Builtin::ParseFloat => (vec![Type::Str], Type::Float),
+        Builtin::Input => (vec![Type::Str], Type::Str),
+        Builtin::ReadFile => (vec![Type::Str], Type::Str),
+        Builtin::WriteFile | Builtin::AppendFile => (vec![Type::Str, Type::Str], Type::Unit),
+        Builtin::FileExists => (vec![Type::Str], Type::Bool),
+        Builtin::ListDir => (vec![Type::Str], Type::array(Type::Str)),
+        Builtin::DeleteFile => (vec![Type::Str], Type::Unit),
+        Builtin::Args => (vec![], Type::array(Type::Str)),
+        Builtin::Env => (vec![Type::Str, Type::Str], Type::Str),
+        Builtin::Exit => (vec![Type::Int], Type::Unit),
+        Builtin::Eprint => (vec![Type::Str], Type::Unit),
+        Builtin::TimeMs => (vec![], Type::Int),
+        Builtin::SleepMs => (vec![Type::Int], Type::Unit),
     }
 }
 
@@ -182,7 +229,12 @@ impl Checker {
         self.diags.push(d);
     }
 
-    fn declare_global(&mut self, name: &Ident, g: Global) {
+    /// The function or app `name` as seen from the unit being checked.
+    fn global(&self, name: &str) -> Option<Global> {
+        self.globals.get(&qualified(&self.module, name)).cloned()
+    }
+
+    fn declare_global(&mut self, module: &str, name: &Ident, g: Global) {
         if Builtin::by_name(&name.name).is_some() {
             self.error(Diagnostic::error(
                 format!(
@@ -193,7 +245,8 @@ impl Checker {
             ));
             return;
         }
-        if self.globals.contains_key(&name.name) {
+        let key = qualified(module, &name.name);
+        if self.globals.contains_key(&key) {
             self.error(
                 Diagnostic::error(
                     format!("`{}` is defined more than once", name.name),
@@ -204,7 +257,7 @@ impl Checker {
             );
             return;
         }
-        self.globals.insert(name.name.clone(), g);
+        self.globals.insert(key, g);
     }
 
     fn resolve_type(&mut self, t: &TypeExpr) -> Option<Type> {
@@ -274,8 +327,8 @@ impl Checker {
     }
 
     fn check_fn(&mut self, f: &FnDecl) {
-        let sig = match self.globals.get(&f.name.name) {
-            Some(Global::Fn(sig)) => sig.clone(),
+        let sig = match self.global(&f.name.name) {
+            Some(Global::Fn(sig)) => sig,
             _ => None,
         };
         let declared_ret = sig.as_ref().map(|s| s.ret.clone());
@@ -425,6 +478,14 @@ impl Checker {
                 };
                 self.loop_body(body, Some((var, elem)));
             }
+            StmtKind::Try { body, err, handler } => {
+                self.check_block(body);
+                self.scopes.push(HashMap::new());
+                self.declare_local(err, Some(Type::Str), false);
+                self.check_stmts(&handler.stmts);
+                self.scopes.pop();
+            }
+            StmtKind::Fail(message) => self.expect_expr(message, &Type::Str),
             StmtKind::Break | StmtKind::Continue => {
                 if self.loop_depth == 0 {
                     let word = if matches!(s.kind, StmtKind::Break) {
@@ -618,13 +679,17 @@ impl Checker {
                 if let Some(local) = self.lookup(name) {
                     return local.ty.clone();
                 }
-                let d = match self.globals.get(name) {
+                let d = match self.global(name) {
                     Some(Global::Fn(_)) => {
                         Diagnostic::error(format!("`{name}` is a function, not a value"), e.span)
                             .note(format!("call it with `{name}(...)`"))
                     }
                     Some(Global::App) => {
                         Diagnostic::error(format!("`{name}` is an app, not a value"), e.span)
+                    }
+                    None if self.imports.contains_key(name) => {
+                        Diagnostic::error(format!("`{name}` is a module, not a value"), e.span)
+                            .note(format!("call its functions like `{name}.function(...)`"))
                     }
                     None => Diagnostic::error(
                         format!("cannot find variable `{name}` in this scope"),
@@ -859,7 +924,7 @@ impl Checker {
             self.check_args(&format!("function `{}`", callee.name), e, args, &params);
             return Some(ret);
         }
-        let sig = match self.globals.get(&callee.name).cloned() {
+        let sig = match self.global(&callee.name) {
             Some(Global::Fn(Some(sig))) => sig,
             Some(Global::Fn(None)) => {
                 for a in args {
@@ -890,6 +955,44 @@ impl Checker {
             }
         };
         self.check_args(&format!("function `{}`", callee.name), e, args, &sig.params);
+        self.calls
+            .insert(e.id, qualified(&self.module, &callee.name));
+        Some(sig.ret)
+    }
+
+    /// `alias.function(args)` where `alias` names an imported module.
+    fn module_call(
+        &mut self,
+        e: &Expr,
+        module: &str,
+        alias: &str,
+        function: &Ident,
+        args: &[Expr],
+    ) -> Option<Type> {
+        let target = qualified(module, &function.name);
+        let Some(Global::Fn(sig)) = self.globals.get(&target).cloned() else {
+            for a in args {
+                self.expr(a, None);
+            }
+            self.error(Diagnostic::error(
+                format!("module `{alias}` has no function `{}`", function.name),
+                function.span,
+            ));
+            return None;
+        };
+        let Some(sig) = sig else {
+            for a in args {
+                self.expr(a, None);
+            }
+            return None;
+        };
+        self.check_args(
+            &format!("function `{alias}.{}`", function.name),
+            e,
+            args,
+            &sig.params,
+        );
+        self.calls.insert(e.id, target);
         Some(sig.ret)
     }
 
@@ -900,6 +1003,13 @@ impl Checker {
         method: &Ident,
         args: &[Expr],
     ) -> Option<Type> {
+        if let ExprKind::Var(alias) = &receiver.kind {
+            if self.lookup(alias).is_none() {
+                if let Some(module) = self.imports.get(alias).cloned() {
+                    return self.module_call(e, &module, alias, method, args);
+                }
+            }
+        }
         let Some(rt) = self.expr(receiver, None) else {
             for a in args {
                 self.expr(a, None);
@@ -1065,6 +1175,66 @@ app Main {
     }
 
     #[test]
+    fn try_catch_and_fail() {
+        assert_ok(
+            "fn f(x: Int) -> Int {\n if x > 0 { return x }\n fail \"negative\"\n}\napp A {\n try { say f(1) } catch e { say e.upper() }\n}",
+        );
+        assert_error("app A { fail 1 }", "expected `Str`, found `Int`");
+        assert_error(
+            "app A { try { } catch e { e = \"x\" } }",
+            "immutable variable `e`",
+        );
+        assert_error(
+            "app A { try { } catch e { }\n say e }",
+            "cannot find variable `e`",
+        );
+        // `try` only counts as returning when both blocks do
+        assert_error(
+            "fn f() -> Int { try { return 1 } catch e { say e } }",
+            "may reach its end without returning",
+        );
+        assert_ok("fn f() -> Int { try { return 1 } catch e { return 2 } }");
+    }
+
+    #[test]
+    fn module_calls() {
+        use crate::parser::parse_file;
+        let (main, next) = parse_file(
+            "use lib.m\napp A { say m.twice(2)\n say m.nope()\n say m }",
+            0,
+            0,
+        )
+        .unwrap();
+        let (lib, _) = parse_file("fn twice(n: Int) -> Int { return helper(n) }\nfn helper(n: Int) -> Int { return n * 2 }", 1, next).unwrap();
+        let units = vec![
+            Unit {
+                name: String::new(),
+                file: 0,
+                program: main,
+                imports: [("m".to_string(), "lib.m".to_string())].into(),
+            },
+            Unit {
+                name: "lib.m".into(),
+                file: 1,
+                program: lib,
+                imports: HashMap::new(),
+            },
+        ];
+        let errs: Vec<String> = analyze_units(&units)
+            .unwrap_err()
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+        assert_eq!(
+            errs,
+            [
+                "module `m` has no function `nope`",
+                "`m` is a module, not a value"
+            ]
+        );
+    }
+
+    #[test]
     fn reports_float_errors() {
         assert_error(
             "app A { say 1 + 1.5 }",
@@ -1084,7 +1254,6 @@ app Main {
         assert_error("app A {}\napp A {}", "defined more than once");
         assert_error("app A { let x = 1\n let x = 2 }", "already declared");
         assert_error("app A { let x = 1\n x = 2 }", "immutable variable `x`");
-        assert_error("use net.http\napp A {}", "unresolved module `net.http`");
     }
 
     #[test]

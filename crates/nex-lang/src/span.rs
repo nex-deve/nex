@@ -1,15 +1,25 @@
 //! Source files and byte-offset spans.
 
-/// A half-open byte range `[start, end)` into a source file.
+/// A half-open byte range `[start, end)` into source file number `file`
+/// (an index into the list of files of a compilation; the main file is 0).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
+    pub file: u32,
 }
 
 impl Span {
     pub fn new(start: usize, end: usize) -> Span {
-        Span { start, end }
+        Span {
+            start,
+            end,
+            file: 0,
+        }
+    }
+
+    pub fn in_file(self, file: u32) -> Span {
+        Span { file, ..self }
     }
 
     /// The smallest span covering both `self` and `other`.
@@ -17,6 +27,7 @@ impl Span {
         Span {
             start: self.start.min(other.start),
             end: self.end.max(other.end),
+            file: self.file,
         }
     }
 }

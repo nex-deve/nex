@@ -8,7 +8,7 @@ use nex_lang::artifact;
 use nex_lang::bytecode::{Const, FnKind, Function, Module, Op, Pos};
 use nex_lang::span::SourceFile;
 use nex_lang::verify::verify;
-use nex_lang::vm::{run_app, Limits};
+use nex_lang::vm::{run_app, Host, Limits};
 
 /// xorshift64* PRNG.
 struct Rng(u64);
@@ -119,6 +119,15 @@ fn limits() -> Limits {
     }
 }
 
+/// Run with tight limits and no file or environment access.
+fn sandboxed(module: &nex_lang::bytecode::Module, app: u32) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let mut input: &[u8] = b"line\n";
+    let mut host = Host::new(&mut out, &mut err, &mut input);
+    host.allow_io = false;
+    let _ = run_app(module, app, &mut host, &limits());
+}
+
 /// Compile and, if that succeeds, run with tight limits. Must not panic.
 fn exercise(text: &str) {
     let src = SourceFile::new("fuzz.nex", text);
@@ -127,8 +136,7 @@ fn exercise(text: &str) {
         let decoded = artifact::decode(&artifact::encode(&module)).expect("roundtrip");
         assert_eq!(decoded, module);
         for &app in &module.apps {
-            let mut out = Vec::new();
-            let _ = run_app(&module, app, &mut out, &limits());
+            sandboxed(&module, app);
         }
     } else {
         // Diagnostics must render without panicking, too.
@@ -191,7 +199,10 @@ fn mutated_valid_programs() {
 
 fn random_op(rng: &mut Rng) -> Op {
     let x = rng.below(6) as u32;
-    match rng.below(36) {
+    match rng.below(40) {
+        35 => Op::TryBegin(x),
+        36 => Op::TryEnd,
+        37 => Op::Fail,
         27 => Op::MakeArray(x),
         28 => Op::MakeMap(x % 3),
         29 => Op::Index,
@@ -249,11 +260,12 @@ fn random_bytecode_is_verified_or_rejected() {
                 },
                 num_locals: 2 + rng.below(3) as u32,
                 positions: vec![Pos { line: 1, col: 1 }; code.len()],
+                source: 0,
                 code,
             });
         }
         let module = Module {
-            source_name: "fuzz".into(),
+            sources: vec!["fuzz".into()],
             consts: vec![
                 Const::Int(rng.next() as i64),
                 Const::Str("s".into()),
@@ -265,8 +277,7 @@ fn random_bytecode_is_verified_or_rejected() {
         };
         if verify(&module).is_ok() {
             accepted += 1;
-            let mut out = Vec::new();
-            let _ = run_app(&module, 0, &mut out, &limits());
+            sandboxed(&module, 0);
         }
         let bytes = artifact::encode(&module);
         assert_eq!(artifact::decode(&bytes).as_ref(), Ok(&module));
@@ -289,7 +300,7 @@ fn random_bytes_never_decode_into_a_panic() {
         if let Ok(m) = artifact::decode(&bytes) {
             if verify(&m).is_ok() {
                 for &app in &m.apps {
-                    let _ = run_app(&m, app, &mut Vec::new(), &limits());
+                    sandboxed(&m, app);
                 }
             }
         }

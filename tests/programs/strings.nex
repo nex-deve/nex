@@ -7,4 +7,6 @@ app Strings {
     say "tab:\tquote:\" backslash:\\"
     say "unicode: হ্যালো 👋 café"
     say ""
+    let words = ["a", "b"]
+    say "joined: {words.join("-")}, upper: {"nex".upper()}"
 }

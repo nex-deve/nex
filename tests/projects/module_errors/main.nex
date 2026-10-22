@@ -1,0 +1,8 @@
+use helpers
+use missing.thing
+
+app Main {
+    say helpers.twice(2)
+    say helpers.nope(1)
+    say helpers
+}

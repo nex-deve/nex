@@ -1,0 +1,5 @@
+compile
+expected `Int`, found `Str`
+module `helpers` has no function `nope`
+`helpers` is a module, not a value
+helpers.nex:2:18

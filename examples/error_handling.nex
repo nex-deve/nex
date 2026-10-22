@@ -1,0 +1,27 @@
+// Errors with fail, handled with try / catch.
+fn withdraw(balance: Int, amount: Int) -> Int {
+    if amount <= 0 {
+        fail "amount must be positive"
+    }
+    if amount > balance {
+        fail "not enough money: balance {balance}, wanted {amount}"
+    }
+    return balance - amount
+}
+
+app Bank {
+    var balance = 100
+    for amount in [30, 500, -5, 50] {
+        try {
+            balance = withdraw(balance, amount)
+            say "withdrew {amount}, left {balance}"
+        } catch err {
+            say "refused: {err}"
+        }
+    }
+    try {
+        say parse_int("12x")
+    } catch err {
+        say "bad number: {err}"
+    }
+}

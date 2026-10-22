@@ -1,0 +1,5 @@
+withdrew 30, left 70
+refused: not enough money: balance 70, wanted 500
+refused: amount must be positive
+withdrew 50, left 20
+bad number: parse_int: "12x" is not a valid Int

@@ -1,0 +1,11 @@
+fn check(n: Int) {
+    if n > 10 {
+        fail "too big: {n}"
+    }
+}
+
+app Main {
+    check(5)
+    say "ok"
+    check(99)
+}

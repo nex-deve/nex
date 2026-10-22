@@ -1,0 +1,3 @@
+Your name: Your age: Hello Rahad, next year you will be 25.
+args: ["first", "second"]
+more? no more input: input: no more input (end of file)

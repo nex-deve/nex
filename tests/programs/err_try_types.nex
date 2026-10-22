@@ -1,0 +1,10 @@
+app Main {
+    fail 42
+    try {
+        say 1
+    } catch e {
+        let n: Int = e
+    }
+    say input(5)
+    exit("x")
+}

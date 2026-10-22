@@ -1,0 +1,15 @@
+// Functions in a module call each other by their plain names.
+fn square(n: Int) -> Int {
+    return n * n
+}
+
+fn hypot_sq(a: Int, b: Int) -> Int {
+    return square(a) + square(b)
+}
+
+fn safe_sqrt(x: Float) -> Float {
+    if x < 0.0 {
+        fail "cannot take the square root of {x}"
+    }
+    return sqrt(x)
+}
