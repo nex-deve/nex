@@ -424,3 +424,88 @@ fn modules_from_the_cli() {
     assert!(err.contains("--> helpers.nex:2:18"), "{err}");
     assert!(err.contains("2 |     return n * 2 + \"a\""), "{err}");
 }
+
+#[test]
+fn http_server_and_client() {
+    use std::io::{BufRead, BufReader, Read, Write as _};
+    let dir = scratch("http");
+    let server = write(
+        &dir,
+        "server.nex",
+        r#"app Server {
+    let s = http_listen(0)
+    say "port {http_port(s)}"
+    for i in 0..3 {
+        let req = http_accept(s)
+        if req["path"] == "/hello" {
+            let reply = {"hello": json(req["query"]), "method": json(req["method"])}
+            http_respond(req["id"], 200, "application/json", to_json(reply))
+        } else if req["method"] == "POST" {
+            http_respond(req["id"], 201, "text/plain", req["body"].upper())
+        } else {
+            http_respond(req["id"], 404, "text/plain", "nothing at {req["path"]}")
+        }
+    }
+}
+"#,
+    );
+    let mut child = nex()
+        .arg("run")
+        .arg(&server)
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut out = BufReader::new(child.stdout.take().unwrap());
+    let mut first = String::new();
+    out.read_line(&mut first).unwrap();
+    let port: u16 = first.trim().strip_prefix("port ").unwrap().parse().unwrap();
+    let base = format!("http://127.0.0.1:{port}");
+
+    // 1. A raw HTTP request, no curl involved.
+    let mut tcp = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    tcp.write_all(b"GET /hello?name=nex HTTP/1.1\r\nHost: x\r\n\r\n")
+        .unwrap();
+    let mut raw = String::new();
+    tcp.read_to_string(&mut raw).unwrap();
+    assert!(raw.starts_with("HTTP/1.1 200 OK\r\n"), "{raw}");
+    assert!(raw.contains("Content-Type: application/json"), "{raw}");
+    assert!(
+        raw.ends_with(r#"{"hello":"name=nex","method":"GET"}"#),
+        "{raw}"
+    );
+
+    // 2. The NEX client (uses curl) for POST and a 404 error.
+    let client = write(
+        &dir,
+        "client.nex",
+        r#"app Client {
+    let base = args()[0]
+    say http_post("{base}/echo", "make me loud", "text/plain")
+    try {
+        say http_get("{base}/missing")
+    } catch e {
+        say "caught: {e.contains("returned HTTP 404")}"
+    }
+    try {
+        say http_get("ftp://example.com")
+    } catch e {
+        say e
+    }
+}
+"#,
+    );
+    let o = run(&["run", client.to_str().unwrap(), "--", &base]);
+    assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
+    assert_eq!(
+        stdout(&o),
+        "MAKE ME LOUD\ncaught: true\nhttp_get: the URL must start with http:// or https://\n"
+    );
+
+    let status = child.wait().unwrap();
+    assert!(status.success());
+
+    // 3. The sandbox blocks the network.
+    let o = run(&["run", "--sandbox", client.to_str().unwrap(), "--", &base]);
+    assert_eq!(o.status.code(), Some(3));
+    assert!(stderr(&o).contains("network access is disabled (--sandbox)"));
+}

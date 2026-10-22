@@ -264,7 +264,7 @@ impl FnBuilder<'_> {
                 }
             }
             StmtKind::Say(e) => {
-                self.expr(e);
+                self.text_expr(e);
                 self.emit(Op::Say, at);
             }
             StmtKind::Return(value) => {
@@ -364,6 +364,15 @@ impl FnBuilder<'_> {
                 self.expr(e);
                 self.emit(Op::Pop, at);
             }
+        }
+    }
+
+    /// Compile a value that will be shown as text; `Json` values are shown
+    /// as JSON (so `null` prints as `null`, strings keep their quotes).
+    fn text_expr(&mut self, e: &Expr) {
+        self.expr(e);
+        if self.analysis.types.get(&e.id) == Some(&Type::Json) {
+            self.emit(Op::Builtin(Builtin::ToJson.id()), e.span.start);
         }
     }
 
@@ -470,7 +479,7 @@ impl FnBuilder<'_> {
                             let i = self.consts.str(s);
                             self.emit(Op::PushConst(i), at);
                         }
-                        InterpPart::Expr(inner) => self.expr(inner),
+                        InterpPart::Expr(inner) => self.text_expr(inner),
                     }
                 }
                 self.emit(Op::Format(parts.len() as u32), at);

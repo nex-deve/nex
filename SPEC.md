@@ -382,8 +382,76 @@ Relative paths are relative to the current working directory. Failed
 file operations are runtime errors (catchable) whose message starts with
 the function name, e.g. `read_file: cannot read "x.txt": ...`.
 
-`nex run --sandbox` disables the file functions and `env` (they raise
-`... is disabled (--sandbox)`); the others keep working.
+`nex run --sandbox` disables the file functions, `env` and all network
+functions (they raise `... is disabled (--sandbox)`); the others keep
+working.
+
+## 13b. JSON
+
+`Json` is a type for any JSON value. Objects are read with methods; there
+is no indexing with `[]`.
+
+```
+let j = json_parse("\{\"name\": \"NEX\", \"tags\": [\"fast\"]\}")
+say j.get("name").str()          // NEX
+say j.get("tags").at(0)          // "fast"   (Json values print as JSON)
+let reply = {"ok": json(true), "count": json(3)}
+say to_json(reply)               // {"count":3,"ok":true}
+```
+
+| Function / method | Type | Notes |
+|---|---|---|
+| `json_parse(text)` | Str → Json | runtime error on invalid JSON; nesting limit 128 |
+| `to_json(value)` | any → Str | compact JSON; maps become objects (non-Str keys become strings), `Float` NaN/inf is an error |
+| `json(value)` | any → Json | wrap a value so different types can share one map or array |
+| `j.get(key)` | Json | object field, or `null` if missing; error if `j` is not an object |
+| `j.has(key)` | Bool | false for non-objects |
+| `j.keys()` | [Str] | object keys, sorted |
+| `j.at(i)` | Json | array element; error if out of bounds |
+| `j.items()` | [Json] | array elements |
+| `j.len()` | Int | array, object or string length |
+| `j.str()`, `j.int()`, `j.float()`, `j.bool()` | | convert; error if the kind is wrong (`int()` accepts whole numbers) |
+| `j.is_null()` | Bool | |
+| `j.kind()` | Str | `null`, `bool`, `number`, `string`, `array` or `object` |
+
+Whole JSON numbers that fit in 64 bits are integers; others are floats.
+`say` and interpolation show `Json` values as JSON text. In a NEX string
+literal, write `\{` and `\}` for JSON braces.
+
+## 13c. HTTP
+
+**Client** (uses the system `curl` program, present on current Windows,
+macOS and Linux):
+
+| Function | Type | Notes |
+|---|---|---|
+| `http_get(url)` | Str → Str | response body |
+| `http_post(url, body, content_type)` | Str, Str, Str → Str | response body |
+
+URLs must start with `http://` or `https://`; redirects are followed; the
+timeout is 60 seconds. A status of 400 or more, or a network failure, is a
+runtime error (catchable).
+
+**Server** (single-threaded, HTTP/1.1, one request at a time):
+
+```
+let server = http_listen(8080)
+while true {
+    let req = http_accept(server)                // waits for a request
+    http_respond(req["id"], 200, "text/html", "<h1>Hi {req["path"]}</h1>")
+}
+```
+
+| Function | Type | Notes |
+|---|---|---|
+| `http_listen(port)` | Int → Int | listens on `127.0.0.1:port`; `0` picks a free port; returns a server handle |
+| `http_port(server)` | Int → Int | the actual port |
+| `http_accept(server)` | Int → {Str: Str} | keys `id`, `method`, `path`, `query`, `body`, and `header:<name>` (lower case) |
+| `http_respond(id, status, content_type, body)` | Str, Int, Str, Str → Unit | sends the response and closes the connection |
+
+The server only listens on the local machine. To serve the internet, put
+it behind a reverse proxy (nginx, Caddy). Request heads are limited to
+64 KiB and bodies to 16 MiB; a malformed request gets `400` automatically.
 
 ## 14. Execution model and limits
 

@@ -197,9 +197,11 @@ pub struct Host<'h> {
     pub input: &'h mut dyn BufRead,
     /// Values returned by `args()`.
     pub args: Vec<String>,
-    /// Whether file and environment built-ins are allowed. `false` is the
-    /// CLI's `--sandbox` mode.
+    /// Whether file, environment and network built-ins are allowed.
+    /// `false` is the CLI's `--sandbox` mode.
     pub allow_io: bool,
+    /// Open HTTP servers and connections waiting for a response.
+    pub net: Net,
 }
 
 impl<'h> Host<'h> {
@@ -210,7 +212,158 @@ impl<'h> Host<'h> {
             input,
             args: Vec::new(),
             allow_io: true,
+            net: Net::default(),
         }
+    }
+}
+
+/// HTTP server state owned by a [`Host`].
+#[derive(Default)]
+pub struct Net {
+    listeners: Vec<std::net::TcpListener>,
+    pending: std::collections::HashMap<String, std::net::TcpStream>,
+    next_id: u64,
+}
+
+/// Largest request body `http_accept` reads.
+const MAX_BODY: usize = 16 * 1024 * 1024;
+/// Largest request head (request line + headers).
+const MAX_HEAD: usize = 64 * 1024;
+
+fn reason(status: i64) -> &'static str {
+    match status {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+        301 => "Moved Permanently",
+        302 => "Found",
+        304 => "Not Modified",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        500 => "Internal Server Error",
+        _ => "",
+    }
+}
+
+struct Request {
+    method: String,
+    target: String,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+}
+
+/// Read one HTTP/1.1 request. `None` if it is malformed or too large.
+fn read_request(stream: &mut std::net::TcpStream) -> Option<Request> {
+    use std::io::Read;
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    let head_end = loop {
+        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            break i;
+        }
+        if buf.len() > MAX_HEAD {
+            return None;
+        }
+        let n = stream.read(&mut chunk).ok()?;
+        if n == 0 {
+            return None;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    };
+    let head = String::from_utf8(buf[..head_end].to_vec()).ok()?;
+    let mut lines = head.split("\r\n");
+    let mut first = lines.next()?.split(' ');
+    let (method, target) = (first.next()?.to_string(), first.next()?.to_string());
+    let mut headers = Vec::new();
+    let mut length = 0usize;
+    for line in lines {
+        let (name, value) = line.split_once(':')?;
+        let (name, value) = (name.trim().to_ascii_lowercase(), value.trim().to_string());
+        if name == "content-length" {
+            length = value.parse().ok()?;
+        }
+        headers.push((name, value));
+    }
+    if length > MAX_BODY {
+        return None;
+    }
+    let mut body = buf[head_end + 4..].to_vec();
+    while body.len() < length {
+        let n = stream.read(&mut chunk).ok()?;
+        if n == 0 {
+            return None;
+        }
+        body.extend_from_slice(&chunk[..n]);
+    }
+    body.truncate(length);
+    Some(Request {
+        method,
+        target,
+        headers,
+        body,
+    })
+}
+
+/// Run `curl` for an HTTP(S) request and return the response body.
+fn curl(name: &str, url: &str, post: Option<(&str, &str)>) -> Res<String> {
+    use std::process::{Command, Stdio};
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err(format!(
+            "{name}: the URL must start with http:// or https://"
+        ));
+    }
+    const MARK: &str = "\n@@NEX_HTTP_STATUS@@";
+    let mut cmd = Command::new("curl");
+    cmd.args(["-sS", "-L", "--max-time", "60", "--proto", "=http,https"])
+        .args(["--proto-redir", "=http,https", "-w"])
+        .arg(format!("{MARK}%{{http_code}}"));
+    if let Some((_, content_type)) = post {
+        cmd.args(["-X", "POST", "--data-binary", "@-", "-H"])
+            .arg(format!("Content-Type: {content_type}"));
+    }
+    cmd.arg("--url").arg(url);
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn().map_err(|e| {
+        format!("{name}: needs the `curl` program, which could not be started ({e})")
+    })?;
+    if let Some(mut stdin) = child.stdin.take() {
+        if let Some((body, _)) = post {
+            let _ = stdin.write_all(body.as_bytes());
+        }
+    }
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("{name}: {e}"))?;
+    if !out.status.success() {
+        let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(format!("{name}: request to {url} failed: {msg}"));
+    }
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let (body, status) = text
+        .rsplit_once(MARK)
+        .ok_or_else(|| format!("{name}: unexpected response from curl"))?;
+    let status: i64 = status.trim().parse().unwrap_or(0);
+    if status >= 400 {
+        let preview: String = body.chars().take(200).collect();
+        return Err(format!("{name}: {url} returned HTTP {status}: {preview}"));
+    }
+    Ok(body.to_string())
+}
+
+fn json_kind(v: &Value) -> &'static str {
+    match v {
+        Value::Unit => "null",
+        Value::Bool(_) => "bool",
+        Value::Int(_) | Value::Float(_) => "number",
+        Value::Str(_) => "string",
+        Value::Array(_) => "array",
+        Value::Map(_) => "object",
     }
 }
 
@@ -418,14 +571,118 @@ impl Vm<'_, '_> {
                 | Builtin::ListDir
                 | Builtin::DeleteFile
                 | Builtin::Env
+                | Builtin::HttpGet
+                | Builtin::HttpPost
+                | Builtin::HttpListen
+                | Builtin::HttpAccept
+                | Builtin::HttpRespond
         );
         if io_needed && !self.host.allow_io {
             return Err(format!(
-                "{}: file and environment access is disabled (--sandbox)",
+                "{}: file, environment and network access is disabled (--sandbox)",
                 b.name()
             ));
         }
+        let int = |i: usize| want_int(args.get(i).ok_or("missing argument (invalid bytecode)")?);
+        if matches!(b, Builtin::HttpAccept | Builtin::SleepMs) {
+            // Show everything printed so far before waiting.
+            let _ = self.host.out.flush();
+        }
         match b {
+            Builtin::HttpGet => {
+                let body = curl("http_get", &s(0)?, None)?;
+                self.str_value(body)
+            }
+            Builtin::HttpPost => {
+                let (url, body, content_type) = (s(0)?, s(1)?, s(2)?);
+                let reply = curl("http_post", &url, Some((&body, &content_type)))?;
+                self.str_value(reply)
+            }
+            Builtin::HttpListen => {
+                let port = int(0)?;
+                if !(0..=65535).contains(&port) {
+                    return Err(format!("http_listen({port}): port must be 0-65535"));
+                }
+                let listener = std::net::TcpListener::bind(("127.0.0.1", port as u16))
+                    .map_err(|e| format!("http_listen: cannot listen on port {port}: {e}"))?;
+                self.host.net.listeners.push(listener);
+                Ok(Value::Int(self.host.net.listeners.len() as i64 - 1))
+            }
+            Builtin::HttpPort => {
+                let h = int(0)?;
+                let listener = usize::try_from(h)
+                    .ok()
+                    .and_then(|h| self.host.net.listeners.get(h))
+                    .ok_or_else(|| format!("http_port: no server with handle {h}"))?;
+                let port = listener
+                    .local_addr()
+                    .map_err(|e| format!("http_port: {e}"))?
+                    .port();
+                Ok(Value::Int(port as i64))
+            }
+            Builtin::HttpAccept => {
+                let h = int(0)?;
+                let listener = usize::try_from(h)
+                    .ok()
+                    .and_then(|h| self.host.net.listeners.get(h))
+                    .ok_or_else(|| format!("http_accept: no server with handle {h}"))?;
+                loop {
+                    let (mut stream, _) =
+                        listener.accept().map_err(|e| format!("http_accept: {e}"))?;
+                    let Some(Request {
+                        method,
+                        target,
+                        headers,
+                        body,
+                    }) = read_request(&mut stream)
+                    else {
+                        let _ = stream.write_all(
+                            b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        );
+                        continue;
+                    };
+                    let (path, query) = match target.split_once('?') {
+                        Some((p, q)) => (p.to_string(), q.to_string()),
+                        None => (target, String::new()),
+                    };
+                    self.host.net.next_id += 1;
+                    let id = self.host.net.next_id.to_string();
+                    let mut map = BTreeMap::new();
+                    let mut put = |k: String, v: String| {
+                        map.insert(Key::Str(Rc::from(k)), Value::Str(Rc::from(v)));
+                    };
+                    put("id".into(), id.clone());
+                    put("method".into(), method);
+                    put("path".into(), path);
+                    put("query".into(), query);
+                    put("body".into(), String::from_utf8_lossy(&body).into_owned());
+                    for (name, value) in headers {
+                        put(format!("header:{name}"), value);
+                    }
+                    self.host.net.pending.insert(id, stream);
+                    return Ok(Value::Map(Rc::new(map)));
+                }
+            }
+            Builtin::HttpRespond => {
+                let (id, status, content_type, body) = (s(0)?, int(1)?, s(2)?, s(3)?);
+                if !(100..=999).contains(&status) {
+                    return Err(format!("http_respond: invalid status {status}"));
+                }
+                let mut stream =
+                    self.host.net.pending.remove(&*id).ok_or_else(|| {
+                        format!("http_respond: no open request with id {:?}", &*id)
+                    })?;
+                let head = format!(
+                    "HTTP/1.1 {status} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    reason(status),
+                    content_type.replace(['\r', '\n'], ""),
+                    body.len()
+                );
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body.as_bytes());
+                let _ = stream.flush();
+                Ok(Value::Unit)
+            }
             Builtin::Input => {
                 let prompt = s(0)?;
                 let _ = write!(self.host.out, "{prompt}");
@@ -819,6 +1076,61 @@ impl Vm<'_, '_> {
             (Method::Values, Value::Map(map)) => {
                 Ok(Value::Array(Rc::new(map.values().cloned().collect())))
             }
+            // Json values: objects are maps, arrays are arrays, null is Unit.
+            (Method::JsonGet, Value::Map(map)) => {
+                let key = Key::from_value(arg(0)?)?;
+                Ok(map.get(&key).cloned().unwrap_or(Value::Unit))
+            }
+            (Method::JsonHas, Value::Map(map)) => {
+                Ok(Value::Bool(map.contains_key(&Key::from_value(arg(0)?)?)))
+            }
+            (Method::JsonHas, _) => Ok(Value::Bool(false)),
+            (Method::JsonKeys, Value::Map(map)) => Ok(Value::Array(Rc::new(
+                map.keys().map(Key::to_value).collect(),
+            ))),
+            (Method::JsonAt, Value::Array(items)) => {
+                let i = index_in(want_int(&arg(0)?)?, items.len(), false)?;
+                Ok(items[i].clone())
+            }
+            (Method::JsonItems, Value::Array(items)) => Ok(Value::Array(items)),
+            (Method::JsonStr, Value::Str(s)) => Ok(Value::Str(s)),
+            (Method::JsonInt, Value::Int(n)) => Ok(Value::Int(n)),
+            (Method::JsonInt, Value::Float(x))
+                if x.fract() == 0.0 && x >= i64::MIN as f64 && x < -(i64::MIN as f64) =>
+            {
+                Ok(Value::Int(x as i64))
+            }
+            (Method::JsonFloat, Value::Float(x)) => Ok(Value::Float(x)),
+            (Method::JsonFloat, Value::Int(n)) => Ok(Value::Float(n as f64)),
+            (Method::JsonBool, Value::Bool(b)) => Ok(Value::Bool(b)),
+            (Method::JsonIsNull, v) => Ok(Value::Bool(v == Value::Unit)),
+            (Method::JsonKind, v) => Ok(Value::Str(Rc::from(json_kind(&v)))),
+            (
+                m @ (Method::JsonGet
+                | Method::JsonKeys
+                | Method::JsonAt
+                | Method::JsonItems
+                | Method::JsonStr
+                | Method::JsonInt
+                | Method::JsonFloat
+                | Method::JsonBool),
+                v,
+            ) => {
+                let wanted = match m {
+                    Method::JsonGet | Method::JsonKeys => "an object",
+                    Method::JsonAt | Method::JsonItems => "an array",
+                    Method::JsonStr => "a string",
+                    Method::JsonInt => "a whole number",
+                    Method::JsonFloat => "a number",
+                    _ => "a bool",
+                };
+                Err(format!(
+                    "json: {}() needs {wanted}, found {}",
+                    m.name(),
+                    json_kind(&v)
+                ))
+            }
+            (Method::Len, Value::Unit) => Err("json: len() of null".into()),
             (m, recv) => Err(format!(
                 "{} has no method `{}` (invalid bytecode)",
                 recv.kind(),
@@ -907,6 +1219,15 @@ impl Vm<'_, '_> {
                     _ => Err(format!("parse_float: {:?} is not a valid Float", &*s)),
                 }
             }
+            Builtin::JsonParse => {
+                let s = want_str(args.first().ok_or("missing argument")?)?;
+                crate::json::parse(&s)
+            }
+            Builtin::ToJson => {
+                let text = crate::json::stringify(args.first().ok_or("missing argument")?)?;
+                self.str_value(text)
+            }
+            Builtin::Json => Ok(args.first().ok_or("missing argument")?.clone()),
             other => Err(format!(
                 "{} is not a pure built-in (invalid bytecode)",
                 other.name()

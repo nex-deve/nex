@@ -180,6 +180,21 @@ fn method_sig(recv: &Type, name: &str) -> Option<(Method, Vec<Type>, Type)> {
             "slice" => (M::Slice, vec![Type::Int, Type::Int], Type::Str),
             _ => return None,
         },
+        Type::Json => match name {
+            "get" => (M::JsonGet, vec![Type::Str], Type::Json),
+            "at" => (M::JsonAt, vec![Type::Int], Type::Json),
+            "has" => (M::JsonHas, vec![Type::Str], Type::Bool),
+            "keys" => (M::JsonKeys, vec![], Type::array(Type::Str)),
+            "items" => (M::JsonItems, vec![], Type::array(Type::Json)),
+            "len" => (M::Len, vec![], Type::Int),
+            "str" => (M::JsonStr, vec![], Type::Str),
+            "int" => (M::JsonInt, vec![], Type::Int),
+            "float" => (M::JsonFloat, vec![], Type::Float),
+            "bool" => (M::JsonBool, vec![], Type::Bool),
+            "is_null" => (M::JsonIsNull, vec![], Type::Bool),
+            "kind" => (M::JsonKind, vec![], Type::Str),
+            _ => return None,
+        },
         Type::Map(k, v) => {
             let (k, v) = ((**k).clone(), (**v).clone());
             match name {
@@ -217,6 +232,16 @@ fn builtin_sig(b: Builtin) -> (Vec<Type>, Type) {
         Builtin::Eprint => (vec![Type::Str], Type::Unit),
         Builtin::TimeMs => (vec![], Type::Int),
         Builtin::SleepMs => (vec![Type::Int], Type::Unit),
+        Builtin::JsonParse => (vec![Type::Str], Type::Json),
+        // `to_json` and `json` accept any type; `call` checks them specially.
+        Builtin::ToJson => (vec![Type::Json], Type::Str),
+        Builtin::Json => (vec![Type::Json], Type::Json),
+        Builtin::HttpGet => (vec![Type::Str], Type::Str),
+        Builtin::HttpPost => (vec![Type::Str, Type::Str, Type::Str], Type::Str),
+        Builtin::HttpListen => (vec![Type::Int], Type::Int),
+        Builtin::HttpPort => (vec![Type::Int], Type::Int),
+        Builtin::HttpAccept => (vec![Type::Int], Type::map(Type::Str, Type::Str)),
+        Builtin::HttpRespond => (vec![Type::Str, Type::Int, Type::Str, Type::Str], Type::Unit),
     }
 }
 
@@ -267,7 +292,7 @@ impl Checker {
                 if ty.is_none() {
                     self.error(
                         Diagnostic::error(format!("unknown type `{name}`"), t.span).note(
-                            "available types are Int, Float, Bool, Str, Unit, [T] and {K: V}",
+                            "available types are Int, Float, Bool, Str, Json, Unit, [T] and {K: V}",
                         ),
                     );
                 }
@@ -921,6 +946,22 @@ impl Checker {
     fn call(&mut self, e: &Expr, callee: &Ident, args: &[Expr]) -> Option<Type> {
         if let Some(b) = Builtin::by_name(&callee.name) {
             let (params, ret) = builtin_sig(b);
+            if matches!(b, Builtin::ToJson | Builtin::Json) {
+                // Any value without `Unit` inside converts to JSON.
+                if args.len() != 1 {
+                    self.check_args(&format!("function `{}`", callee.name), e, args, &params);
+                    return Some(ret);
+                }
+                if let Some(t) = self.expr(&args[0], None) {
+                    if t.contains_unit() {
+                        self.error(Diagnostic::error(
+                            format!("`{t}` cannot be converted to JSON"),
+                            args[0].span,
+                        ));
+                    }
+                }
+                return Some(ret);
+            }
             self.check_args(&format!("function `{}`", callee.name), e, args, &params);
             return Some(ret);
         }

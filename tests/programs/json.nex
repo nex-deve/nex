@@ -1,0 +1,35 @@
+app JsonDemo {
+    let text = "\{\"name\": \"NEX\", \"version\": 3, \"tags\": [\"fast\", \"safe\"], \"price\": 9.5, \"free\": false, \"owner\": null\}"
+    let j = json_parse(text)
+    say j.get("name").str()
+    say j.get("version").int() + 1
+    say j.get("price").float() * 2.0
+    say j.get("free").bool()
+    say j.get("owner").is_null()
+    say j.get("missing").is_null()
+    say j.has("tags")
+    say j.keys()
+    say j.get("tags").len()
+    for tag in j.get("tags").items() {
+        say "tag: {tag.str()}"
+    }
+    say j.get("tags").at(1)
+    say j.get("tags").kind()
+    say j
+    // building JSON
+    let user = {"name": json("Rahad"), "age": json(25), "skills": json(["rust", "nex"])}
+    say to_json(user)
+    say to_json([1.5, 2.0])
+    say to_json({"quote": "say \"hi\"\n"})
+    say "inline: {json_parse("[1, 2]")}"
+    try {
+        say j.get("name").int()
+    } catch e {
+        say e
+    }
+    try {
+        say json_parse("\{bad json\}")
+    } catch e {
+        say e
+    }
+}

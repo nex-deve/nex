@@ -302,6 +302,17 @@ id_enum! {
         RemoveAt = 35, "remove_at", 1, true;
         Remove = 36, "remove", 1, true;
         Clear = 37, "clear", 0, true;
+        JsonGet = 40, "get", 1, false;
+        JsonAt = 41, "at", 1, false;
+        JsonHas = 42, "has", 1, false;
+        JsonKeys = 43, "keys", 0, false;
+        JsonStr = 44, "str", 0, false;
+        JsonInt = 45, "int", 0, false;
+        JsonFloat = 46, "float", 0, false;
+        JsonBool = 47, "bool", 0, false;
+        JsonIsNull = 48, "is_null", 0, false;
+        JsonKind = 49, "kind", 0, false;
+        JsonItems = 50, "items", 0, false;
     }
 }
 
@@ -328,6 +339,15 @@ id_enum! {
         Eprint = 17, "eprint", 1, false;
         TimeMs = 18, "time_ms", 0, false;
         SleepMs = 19, "sleep_ms", 1, false;
+        JsonParse = 20, "json_parse", 1, false;
+        ToJson = 21, "to_json", 1, false;
+        Json = 22, "json", 1, false;
+        HttpGet = 23, "http_get", 1, false;
+        HttpPost = 24, "http_post", 3, false;
+        HttpListen = 25, "http_listen", 1, false;
+        HttpPort = 26, "http_port", 1, false;
+        HttpAccept = 27, "http_accept", 1, false;
+        HttpRespond = 28, "http_respond", 4, false;
     }
 }
 

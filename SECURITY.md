@@ -16,7 +16,9 @@ What the current implementation provides:
   read, write and delete files and read environment variables, like any
   scripting language. `nex run --sandbox` disables all of that; a sandboxed
   program can only use standard input/output, `args`, `exit` and time.
-  There is still no network or process access.
+  Programs can also make HTTP requests (through the system `curl`,
+  restricted to http/https) and run a local HTTP server bound to
+  127.0.0.1. `--sandbox` blocks files, environment and network.
 - **Bytecode verification.** Every module, including `.nexdeve` files from
   disk, is verified before running (see docs/ARCHITECTURE.md). Malformed
   bytecode is rejected or produces a runtime error; it must never cause

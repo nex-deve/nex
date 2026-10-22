@@ -42,12 +42,12 @@ below it first, and none is claimed until it has tests.
 | Robotics / hardware | C + serial port / GPIO bindings, timing |
 | Speed for large programs | profiling, a faster VM or native compilation |
 
-## Milestone C — modules and I/O: **partial**
+## Milestone C — modules, I/O, JSON and HTTP: **done**
 
 - [x] Module system: `use`, file-based module resolution, circular imports allowed
 - [x] File I/O, user input, args, environment variables, stderr, exit codes
-- [ ] JSON
-- [ ] HTTP client (`net.http`)
+- [x] JSON (`Json` type, `json_parse`, `to_json`)
+- [x] HTTP client (via system `curl`) and a single-threaded HTTP server
 - [x] Error handling: `fail`, `try` / `catch` across calls
 - [x] `--sandbox` mode that disables file and environment access
 

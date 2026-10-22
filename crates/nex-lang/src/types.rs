@@ -15,6 +15,8 @@ pub enum Type {
     Array(Box<Type>),
     /// `{K: V}`: a map from keys to values, iterated in sorted key order.
     Map(Box<Type>, Box<Type>),
+    /// Any JSON value (object, array, string, number, bool or null).
+    Json,
 }
 
 impl Type {
@@ -25,6 +27,7 @@ impl Type {
             "Bool" => Some(Type::Bool),
             "Str" => Some(Type::Str),
             "Unit" => Some(Type::Unit),
+            "Json" => Some(Type::Json),
             _ => None,
         }
     }
@@ -66,6 +69,7 @@ impl fmt::Display for Type {
             Type::Bool => f.write_str("Bool"),
             Type::Str => f.write_str("Str"),
             Type::Unit => f.write_str("Unit"),
+            Type::Json => f.write_str("Json"),
             Type::Array(e) => write!(f, "[{e}]"),
             Type::Map(k, v) => write!(f, "{{{k}: {v}}}"),
         }

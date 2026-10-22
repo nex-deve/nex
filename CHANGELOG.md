@@ -9,6 +9,11 @@ Not tagged or released yet.
 
 ### Added
 
+- Stage 3: `Json` type with `json_parse`, `to_json`, `json` and methods
+  (`get`, `at`, `has`, `keys`, `items`, `str`, `int`, `float`, `bool`,
+  `is_null`, `kind`); HTTP client `http_get` / `http_post` (via `curl`);
+  HTTP server `http_listen` / `http_accept` / `http_respond` / `http_port`.
+  `--sandbox` now also blocks the network.
 - Stage 2: modules with `use` (`use lib.math` loads `lib/math.nex`);
   `fail` and `try`/`catch` error handling across calls; file, input,
   args, env, stderr, exit and time built-ins; `nex run --sandbox`;
@@ -43,7 +48,8 @@ Not tagged or released yet.
 ### Known limitations
 
 - No structs/enums, closures or generics.
-- No JSON, HTTP or sockets yet.
+- No raw TCP/UDP sockets or hashing yet. The HTTP server handles one
+  request at a time and listens on 127.0.0.1 only.
 - `nex test`, `nex fmt` and `nex repl` are not implemented (exit code 2).
 - The parser stops at the first syntax error.
 - Instruction count is unlimited unless `--max-steps` is given.

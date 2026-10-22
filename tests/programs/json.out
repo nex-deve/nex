@@ -1,0 +1,20 @@
+NEX
+4
+19.0
+false
+true
+true
+true
+["free", "name", "owner", "price", "tags", "version"]
+2
+tag: fast
+tag: safe
+"safe"
+array
+{"free":false,"name":"NEX","owner":null,"price":9.5,"tags":["fast","safe"],"version":3}
+{"age":25,"name":"Rahad","skills":["rust","nex"]}
+[1.5,2.0]
+{"quote":"say \"hi\"\n"}
+inline: [1,2]
+json: int() needs a whole number, found string
+json_parse: expected a string key at byte 1
