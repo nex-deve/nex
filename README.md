@@ -48,9 +48,10 @@ Not implemented yet: structs, closures, error values, modules/imports
 `nex fmt`, `nex repl`, package management, the VS Code extension.
 See [ROADMAP.md](ROADMAP.md).
 
-**Tested environment:** Windows 11 x86_64 with rustc 1.99.1
-(`x86_64-pc-windows-gnu`). The CI workflow for Linux, Windows and macOS is
-written but has not run yet, so no other platform is verified.
+**Tested environments:** the full test suite passes in GitHub Actions on
+`ubuntu-latest`, `windows-latest` and `macos-latest` (stable Rust), and
+locally on Windows 11 x86_64 with rustc 1.99.1 (`x86_64-pc-windows-gnu`).
+There are no prebuilt binaries yet; build from source.
 
 ## Install from source
 

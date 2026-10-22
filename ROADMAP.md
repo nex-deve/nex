@@ -79,7 +79,7 @@ below it first, and none is claimed until it has tests.
 - [x] Deterministic randomized robustness tests
 - [ ] Coverage-guided fuzzing (`cargo fuzz`)
 - [ ] Benchmarks
-- [x] CI workflow file (fmt, clippy, test on Linux/Windows/macOS) —
-      written, **not yet run on GitHub**
+- [x] CI (fmt, clippy, tests on Linux, Windows and macOS) — passing on
+      GitHub Actions
 - [ ] Release workflow with checksums and binaries
 - [ ] Verified binaries for each target platform

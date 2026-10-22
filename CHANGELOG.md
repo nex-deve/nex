@@ -32,7 +32,7 @@ Not tagged or released yet.
 - Tests: unit, golden-program, example, CLI end-to-end and randomized
   robustness tests.
 - Docs: README, SPEC, architecture, security, roadmap, contributing.
-- CI workflow (not yet run).
+- CI on GitHub Actions: fmt, clippy and tests on Linux, Windows and macOS.
 
 ### Known limitations
 
@@ -42,5 +42,5 @@ Not tagged or released yet.
 - `nex test`, `nex fmt` and `nex repl` are not implemented (exit code 2).
 - The parser stops at the first syntax error.
 - Instruction count is unlimited unless `--max-steps` is given.
-- Verified only on Windows 11 x86_64 (GNU toolchain). No prebuilt binaries
-  and no VS Code extension yet.
+- Tested on Linux, Windows and macOS via CI. No prebuilt binaries and no
+  VS Code extension yet.
