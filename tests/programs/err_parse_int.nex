@@ -1,0 +1,3 @@
+app Main {
+    say parse_int("12a")
+}

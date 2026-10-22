@@ -1,0 +1,3 @@
+compile
+expected variable name, found `=`
+err_syntax.nex:2:9

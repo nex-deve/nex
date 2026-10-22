@@ -1,0 +1,9 @@
+fn divide(a: Int, b: Int) -> Int {
+    return a / b
+}
+
+app Main {
+    say "before"
+    say divide(10, 0)
+    say "after"
+}

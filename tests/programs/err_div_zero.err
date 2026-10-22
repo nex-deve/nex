@@ -1,0 +1,5 @@
+runtime
+before
+runtime error: division by zero
+at fn divide (err_div_zero.nex:2:14)
+at app Main (err_div_zero.nex:7:9)

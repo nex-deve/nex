@@ -1,0 +1,10 @@
+app Strings {
+    let name = "NEX"
+    let n = 41
+    say "Hello, " + name + "!"
+    say "{name} is {n + 1} years old? {n + 1 == 42}"
+    say "braces: \{ and \} and plain }"
+    say "tab:\tquote:\" backslash:\\"
+    say "unicode: হ্যালো 👋 café"
+    say ""
+}

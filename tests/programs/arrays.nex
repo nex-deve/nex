@@ -1,0 +1,34 @@
+app Arrays {
+    var xs = [3, 1, 2]
+    say xs
+    say xs.len()
+    say xs[0] + xs[2]
+    xs.push(10)
+    xs[1] = 5
+    say xs
+    say xs.pop()
+    say xs
+    xs.insert(0, 9)
+    say xs
+    say xs.remove_at(1)
+    say xs
+    say xs.contains(5)
+    say xs.index_of(2)
+    say xs.index_of(42)
+    say xs.sorted()
+    say xs.reversed()
+    say xs.slice(1, 3)
+    say [1, 2] + [3]
+    say ["a", "b"].join("-")
+    say [1, 2] == [1, 2]
+    say [["x"], []]
+    let empty: [Str] = []
+    say empty.len()
+    // value semantics: copies never alias
+    let original = [1, 2]
+    var copy = original
+    copy.push(3)
+    say "{original} {copy}"
+    xs.clear()
+    say xs
+}

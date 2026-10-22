@@ -1,0 +1,9 @@
+app First {
+    say "first"
+    return
+    say "never printed"
+}
+
+app Second {
+    say "second"; say "same line"
+}

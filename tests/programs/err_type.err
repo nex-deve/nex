@@ -1,0 +1,5 @@
+compile
+mismatched types: expected `Int`, found `Str`
+cannot apply `+` to `Int` and `Str`
+`if` condition must be `Bool`, found `Int`
+err_type.nex:3:11

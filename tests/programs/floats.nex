@@ -1,0 +1,20 @@
+app Floats {
+    say 1.5 + 2.25
+    say 10.0 / 4.0
+    say 7.0 % 2.5
+    say -0.5 * 3.0
+    say 0.1 + 0.2
+    say 1e3
+    say 2.5e-1
+    say 3.0
+    say 1.0 / 0.0
+    say to_float(7) / 2.0
+    say to_int(-3.99)
+    say floor(2.7)
+    say round(2.5)
+    say sqrt(16.0)
+    say parse_int(" 42 ") + 1
+    say parse_float("2.5") * 2.0
+    say 1.5 < 2.0
+    say 2.0 == 2.0
+}

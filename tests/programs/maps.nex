@@ -1,0 +1,25 @@
+app Maps {
+    var ages = {"rahad": 25, "ana": 31}
+    ages["zed"] = 40
+    ages["ana"] = 32
+    say ages
+    say ages["ana"]
+    say ages.len()
+    say ages.has("bob")
+    say ages.get("bob", -1)
+    say ages.keys()
+    say ages.values()
+    say ages.remove("zed")
+    say ages.remove("zed")
+    say ages
+    var by_id: {Int: [Str]} = {}
+    by_id[2] = ["b"]
+    by_id[1] = ["a"]
+    by_id[1] = by_id[1] + ["c"]
+    say by_id
+    var flags = {true: "yes", false: "no"}
+    say flags[1 < 2]
+    for k in by_id {
+        say "{k} -> {by_id[k]}"
+    }
+}

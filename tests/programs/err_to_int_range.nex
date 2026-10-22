@@ -1,0 +1,3 @@
+app Main {
+    say to_int(1e300)
+}

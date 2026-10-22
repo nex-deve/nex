@@ -1,0 +1,5 @@
+use net.http
+
+app Web {
+    say "hi"
+}

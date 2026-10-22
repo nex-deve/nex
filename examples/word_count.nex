@@ -1,0 +1,28 @@
+// Count words in a text and print them by frequency.
+fn count_words(text: Str) -> {Str: Int} {
+    var counts: {Str: Int} = {}
+    for raw in text.lower().split(" ") {
+        let word = raw.trim()
+        if word == "" {
+            continue
+        }
+        counts[word] = counts.get(word, 0) + 1
+    }
+    return counts
+}
+
+app WordCount {
+    let text = "the quick fox and the lazy dog and the cat"
+    let counts = count_words(text)
+    var best = ""
+    var best_count = 0
+    for word in counts {
+        if counts[word] > best_count {
+            best = word
+            best_count = counts[word]
+        }
+    }
+    say "{counts.len()} different words"
+    say "most common: \"{best}\" ({best_count} times)"
+    say counts
+}

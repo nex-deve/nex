@@ -1,0 +1,2 @@
+compile
+function `sign` may reach its end without returning a value of type `Int`

@@ -1,0 +1,9 @@
+fn sign(n: Int) -> Int {
+    if n < 0 {
+        return -1
+    }
+}
+
+app Main {
+    say sign(1)
+}

@@ -1,0 +1,17 @@
+app Scopes {
+    let x = 1
+    var y = 10
+    {
+        let x = "inner"
+        y = y + 1
+        say x
+    }
+    say x
+    say y
+    var i = 0
+    while i < 3 {
+        let sq = i * i
+        say "sq {sq}"
+        i = i + 1
+    }
+}

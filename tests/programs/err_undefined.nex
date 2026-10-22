@@ -1,0 +1,4 @@
+app Undefined {
+    say total
+    say missing(1)
+}

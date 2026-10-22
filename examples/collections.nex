@@ -1,0 +1,42 @@
+// Arrays, maps, for loops and floats.
+fn average(xs: [Float]) -> Float {
+    var sum = 0.0
+    for x in xs {
+        sum = sum + x
+    }
+    return sum / to_float(xs.len())
+}
+
+app Collections {
+    // Arrays
+    var scores = [72, 95, 88]
+    scores.push(61)
+    scores[0] = 75
+    say "scores: {scores}"
+    say "sorted: {scores.sorted()}, best: {scores.sorted().reversed()[0]}"
+
+    // Maps
+    var stock: {Str: Int} = {}
+    stock["apple"] = 3
+    stock["mango"] = 12
+    stock["apple"] = stock["apple"] + 2
+    for fruit in stock {
+        say "{fruit}: {stock[fruit]}"
+    }
+    let fruit = "banana"
+    say "{fruit}: {stock.get(fruit, 0)}"
+
+    // Ranges and floats
+    var squares: [Int] = []
+    for i in 1..6 {
+        squares.push(i * i)
+    }
+    say squares
+    say "average: {average([1.5, 2.5, 4.0])}"
+    say "sqrt(2) = {sqrt(2.0)}"
+
+    // Nested collections
+    var grid = [[0, 0, 0], [0, 0, 0]]
+    grid[1][2] = 7
+    say grid
+}

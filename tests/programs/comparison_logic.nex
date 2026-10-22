@@ -1,0 +1,18 @@
+fn noisy(label: Str, value: Bool) -> Bool {
+    say "eval {label}"
+    return value
+}
+
+app Logic {
+    say 1 < 2
+    say 2 <= 2
+    say 3 > 4
+    say 4 >= 5
+    say 1 == 1 && "a" == "a" && true != false
+    say "x" != "y"
+    say !true
+    // && and || short-circuit: the right side runs only when needed.
+    say noisy("a", false) && noisy("b", true)
+    say noisy("c", true) || noisy("d", true)
+    say noisy("e", false) || noisy("f", true)
+}

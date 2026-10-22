@@ -1,0 +1,13 @@
+app NexDeve {
+    let version = 1
+    say "Hello, NexDeve!"
+    say "NEX version: {version}"
+}
+
+fn add(a: Int, b: Int) -> Int {
+    return a + b
+}
+
+app Calculator {
+    say add(10, 20)
+}

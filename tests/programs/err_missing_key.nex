@@ -1,0 +1,4 @@
+app Main {
+    let m = {"a": 1}
+    say m["b"]
+}

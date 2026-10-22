@@ -1,0 +1,4 @@
+app Main {
+    var xs: [Int] = []
+    say xs.pop()
+}

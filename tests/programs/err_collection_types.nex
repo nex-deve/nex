@@ -1,0 +1,7 @@
+app Main {
+    let xs = []
+    let mixed = [1, "two"]
+    let fixed = [1, 2]
+    fixed.push(3)
+    say 1 + 2.0
+}

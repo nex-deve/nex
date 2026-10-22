@@ -1,0 +1,14 @@
+{"ana": 32, "rahad": 25, "zed": 40}
+32
+3
+false
+-1
+["ana", "rahad", "zed"]
+[32, 25, 40]
+true
+false
+{"ana": 32, "rahad": 25}
+{1: ["a", "c"], 2: ["b"]}
+yes
+1 -> ["a", "c"]
+2 -> ["b"]

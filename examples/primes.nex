@@ -1,0 +1,32 @@
+// Prime numbers below 50, using break and continue.
+fn is_prime(n: Int) -> Bool {
+    if n < 2 {
+        return false
+    }
+    var d = 2
+    while d * d <= n {
+        if n % d == 0 {
+            return false
+        }
+        d = d + 1
+    }
+    return true
+}
+
+app Primes {
+    var n = 0
+    var found = ""
+    var count = 0
+    while true {
+        n = n + 1
+        if n >= 50 {
+            break
+        }
+        if !is_prime(n) {
+            continue
+        }
+        found = found + " {n}"
+        count = count + 1
+    }
+    say "{count} primes:{found}"
+}

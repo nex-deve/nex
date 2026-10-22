@@ -1,0 +1,16 @@
+app StringMethods {
+    let s = "  Hello, NEX World  "
+    say s.trim()
+    say s.trim().upper()
+    say s.trim().lower()
+    say s.len()
+    say "a,b,,c".split(",")
+    say "নেক্স".chars().len()
+    say "abc".chars()
+    say "banana".replace("an", "AN")
+    say "banana".index_of("na")
+    say "হ্যালো world".slice(0, 6)
+    say "hello".starts_with("he") && "hello".ends_with("lo")
+    say "hello".contains("ell")
+    say "apple" < "banana"
+}

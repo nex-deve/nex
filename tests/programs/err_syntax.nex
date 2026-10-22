@@ -1,0 +1,3 @@
+app Broken {
+    let = 5
+}

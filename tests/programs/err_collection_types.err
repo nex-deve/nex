@@ -1,0 +1,6 @@
+compile
+cannot infer the type of an empty array
+mismatched types: expected `Int`, found `Str`
+cannot call `push` on immutable variable `fixed`
+cannot apply `+` to `Int` and `Float`
+convert with `to_float(n)`
